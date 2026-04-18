@@ -42,6 +42,39 @@ Add `--ui` to also launch a web interface for browsing and manually invoking too
 # UI available at http://127.0.0.1:5000/ui
 ```
 
+### Run with Docker
+
+A `Dockerfile` is provided in `mcp-toolbox/`. It downloads the official toolbox binary and runs the authenticated configuration (`tools-auth.yaml`).
+
+**Build:**
+
+```bash
+docker build -t crisalid-graph-mcp mcp-toolbox/
+# Pin a specific toolbox version:
+docker build --build-arg TOOLBOX_VERSION=v1.1.0 -t crisalid-graph-mcp mcp-toolbox/
+```
+
+**Run:**
+
+```bash
+docker run -p 5000:5000 \
+  -e NEO4J_URI=bolt://<host>:7687 \
+  -e NEO4J_USER=neo4j \
+  -e NEO4J_PASSWORD=<password> \
+  -e KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm> \
+  -e KEYCLOAK_CLIENT_ID=<client-id> \
+  -e KEYCLOAK_CLIENT_SECRET=<secret> \
+  crisalid-graph-mcp
+```
+
+Or pass an env file:
+
+```bash
+docker run -p 5000:5000 --env-file mcp-toolbox/.env crisalid-graph-mcp
+```
+
+The server listens on `http://0.0.0.0:5000` inside the container, exposed on port 5000.
+
 ### Authentication (Keycloak OIDC)
 
 `tools-auth.yaml` adds a Keycloak OIDC auth layer. Tools marked `authRequired` reject calls without a valid JWT. Clients obtain a token via the `client_credentials` grant (service account) and pass it to the toolbox SDK.
