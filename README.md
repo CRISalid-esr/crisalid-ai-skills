@@ -10,8 +10,8 @@ Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/m
 
 | Toolset | Tools | Use case |
 |---|---|---|
-| `crisalid-restricted` | `get-crisalid-schema` | Clients needing schema discovery only |
-| `crisalid-unrestricted` | `get-crisalid-schema`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
+| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` | Clients needing curated domain tools |
+| `crisalid-unrestricted` | `get-crisalid-schema`, `list-person-publications`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
 
 ### Run the MCP server
 
@@ -28,8 +28,9 @@ Then set your environment variables and start the server:
 
 ```bash
 cd mcp-toolbox
-set -a && source .env && set +a   # set NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
-./toolbox --config tools.yaml
+set -a && source .env && set +a
+./toolbox --config tools.yaml            # without authentication
+./toolbox --config tools-auth.yaml      # with Keycloak authentication
 ```
 
 The server listens on `http://127.0.0.1:5000` by default.
@@ -41,16 +42,75 @@ Add `--ui` to also launch a web interface for browsing and manually invoking too
 # UI available at http://127.0.0.1:5000/ui
 ```
 
+### Authentication (Keycloak OIDC)
+
+`tools-auth.yaml` adds a Keycloak OIDC auth layer. Tools marked `authRequired` reject calls without a valid JWT. Clients obtain a token via the `client_credentials` grant (service account) and pass it to the toolbox SDK.
+
+#### Required environment variables (add to `mcp-toolbox/.env`)
+
+```
+KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
+KEYCLOAK_CLIENT_ID=<your-client-id>
+KEYCLOAK_CLIENT_SECRET=<your-client-secret>
+```
+
+#### Keycloak service account setup
+
+**1. Create a client**
+
+In Keycloak admin → Clients → Create client:
+- Client type: OpenID Connect
+- Client ID: e.g. `example-mcp-client`
+- Enable *Client authentication* (confidential)
+- Enable *Service accounts roles*
+- Disable *Standard flow* and *Direct access grants*
+
+**2. Add an Audience mapper**
+
+The toolbox validates the JWT `aud` claim against `KEYCLOAK_CLIENT_ID`. By default Keycloak does not include the client ID in `aud`, so this mapper is required.
+
+In the client's page → Client scopes → click the dedicated scope (`<client-id>-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
+- Name: `mcp-example-client-audience`
+- Included Custom Audience: `crisalid-graph-mcp`
+- Add to access token: On
+
+**3. Note the client secret**
+
+Clients → `<your-client-id>` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
+
+#### SSL certificates in local environments
+
+If your Keycloak instance uses a self-signed certificate:
+
+- **Client side** (`samples/load_restricted_toolset_authenticated.py`): set `KEYCLOAK_SSL_VERIFY=false` in `.env` to skip verification when fetching tokens.
+- **Toolbox server side**: the toolbox (Go binary) validates the JWT by fetching Keycloak's JWKS endpoint and uses the system CA trust store. Add the cert to the system trust store:
+
+```bash
+# Export the cert
+openssl s_client -connect <keycloak-host>:<port> -showcerts </dev/null 2>/dev/null \
+  | openssl x509 -outform PEM > /tmp/keycloak-local.crt
+
+# Ubuntu/Debian
+sudo cp /tmp/keycloak-local.crt /usr/local/share/ca-certificates/keycloak-local.crt
+sudo update-ca-certificates
+```
+
+Then restart the toolbox for the change to take effect.
+
 ### Run a client
 
 Sample scripts using [toolbox-langchain](https://pypi.org/project/toolbox-langchain/) are in `samples/`. They connect to the running server and invoke tools directly, without an LLM.
 
 ```bash
-# Load the restricted toolset and call get-crisalid-schema
+# Load the restricted toolset and call get-crisalid-schema (no auth)
 uv run python samples/load_restricted_toolset.py
 
-# Load the unrestricted toolset and run a sample Cypher query
+# Load the unrestricted toolset and run a sample Cypher query (no auth)
 uv run python samples/load_unrestricted_toolset.py
+
+# Load the restricted toolset with Keycloak authentication
+# Requires toolbox running with tools-auth.yaml and KEYCLOAK_* env vars set
+uv run python samples/load_restricted_toolset_authenticated.py
 ```
 
 ### Run the tests
