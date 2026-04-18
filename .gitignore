@@ -1,0 +1,7 @@
+.env
+!.env.test
+.idea/
+__pycache__/
+*.pyc
+mcp-toolbox/toolbox
+.venv/

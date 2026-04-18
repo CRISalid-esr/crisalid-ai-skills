@@ -1,0 +1,129 @@
+kind: source
+name: crisalid-neo4j
+type: neo4j
+uri: ${NEO4J_URI}
+user: ${NEO4J_USER}
+password: ${NEO4J_PASSWORD}
+database: neo4j
+
+---
+
+kind: tool
+name: get-crisalid-schema
+type: neo4j-schema
+source: crisalid-neo4j
+description: |
+  Return the full schema of the CRISalid knowledge graph: node labels,
+  relationship types, and property keys. Use this to understand what
+  queries are possible before calling other tools.
+cacheExpireMinutes: 120
+
+---
+
+kind: tool
+name: execute-cypher-readonly
+type: neo4j-execute-cypher
+source: crisalid-neo4j
+description: |
+  Execute an arbitrary read-only Cypher query against the CRISalid knowledge graph.
+  Only read queries are allowed (no CREATE, MERGE, DELETE, SET).
+  Intended for advanced clients with direct graph access needs.
+readOnly: true
+
+---
+
+kind: tool
+name: list-person-publications
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  List all publications for a person identified by their uid.
+  Returns for each document: titles, journal channel (volume/issue/pages + identifiers),
+  source records (harvester metadata only — no SourceJournal or SourceContribution),
+  and co-authors with their institutional affiliation statements.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+    RETURN collect(DISTINCT t.value) AS titles
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[pub:PUBLISHED_IN]->(journal:Journal)
+    OPTIONAL MATCH (journal)-[:HAS_IDENTIFIER]->(jid:JournalIdentifier)
+    WITH pub, journal, collect(DISTINCT jid) AS journal_identifiers
+    RETURN collect(DISTINCT CASE WHEN journal IS NOT NULL THEN {
+      volume: pub.volume, issue: pub.issue, pages: pub.pages,
+      uid: journal.uid, issn_l: journal.issn_l,
+      publisher: journal.publisher, titles: journal.titles,
+      labels: labels(journal),
+      identifiers: journal_identifiers
+    } END) AS publication_channels
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:HAS_ABSTRACT]->(a:TextLiteral)
+    RETURN collect(DISTINCT CASE WHEN a IS NOT NULL
+      THEN {value: a.value, language: a.language} END) AS abstracts
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:RECORDED_BY]->(sr:SourceRecord)
+    RETURN collect(DISTINCT CASE WHEN sr IS NOT NULL THEN {
+      uid: sr.uid, harvester: sr.harvester, url: sr.url,
+      issued: sr.issued, document_types: sr.document_types,
+      source_identifier: sr.source_identifier
+    } END) AS source_records
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(contributor:Person)
+    OPTIONAL MATCH (contributor)-[:HAS_NAME]->(pn:PersonName)
+    OPTIONAL MATCH (pn)-[:HAS_FIRST_NAME]->(fn:Literal)
+    OPTIONAL MATCH (pn)-[:HAS_LAST_NAME]->(ln:Literal)
+    OPTIONAL MATCH (contrib)-[:HAS_AFFILIATION_STATEMENT]->(affil:AuthorityOrganization)
+    WITH contrib, contributor,
+         collect(DISTINCT {first_name: fn.value, last_name: ln.value}) AS names,
+         collect(DISTINCT CASE WHEN affil IS NOT NULL
+           THEN {uid: affil.uid, display_names: affil.display_names} END) AS affiliations
+    RETURN collect(DISTINCT CASE WHEN contributor IS NOT NULL THEN {
+      roles: contrib.roles,
+      affiliations: affiliations,
+      person: {uid: contributor.uid, external: contributor.external, names: names}
+    } END) AS contributions
+  }
+  RETURN doc.uid AS uid,
+         doc.document_type AS document_type,
+         doc.publication_date AS publication_date,
+         doc.publication_date_start AS publication_date_start,
+         doc.publication_date_end AS publication_date_end,
+         doc.oa_status AS oa_status,
+         doc.upw_oa_status AS upw_oa_status,
+         titles, abstracts, publication_channels, source_records, contributions
+  ORDER BY doc.publication_date DESC
+
+---
+
+# Restricted toolset: curated domain tools only, no raw Cypher access.
+# Load with: client.load_toolset("crisalid-restricted")
+kind: toolset
+name: crisalid-restricted
+tools:
+  - get-crisalid-schema
+  - list-person-publications
+
+---
+
+# Unrestricted toolset: adds raw read-only Cypher access.
+# Load with: client.load_toolset("crisalid-unrestricted")
+kind: toolset
+name: crisalid-unrestricted
+tools:
+  - get-crisalid-schema
+  - list-person-publications
+  - execute-cypher-readonly
