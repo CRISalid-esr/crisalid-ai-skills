@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import httpx
+from toolbox_core.protocol import Protocol
 from toolbox_langchain import ToolboxClient
 
 TOOLBOX_URL = "http://127.0.0.1:5000"
@@ -28,7 +29,7 @@ def get_token() -> str:
 
 
 async def main():
-    async with ToolboxClient(TOOLBOX_URL) as toolbox:
+    async with ToolboxClient(TOOLBOX_URL, protocol=Protocol.MCP_LATEST) as toolbox:
         tools = await toolbox.aload_toolset(
             "crisalid-restricted",
             auth_token_getters={"crisalid-keycloak": get_token},

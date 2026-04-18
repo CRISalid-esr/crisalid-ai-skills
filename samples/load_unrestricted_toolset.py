@@ -1,4 +1,6 @@
 import asyncio
+
+from toolbox_core.protocol import Protocol
 from toolbox_langchain import ToolboxClient
 
 TOOLBOX_URL = "http://127.0.0.1:5000"
@@ -6,7 +8,7 @@ SAMPLE_QUERY = "MATCH (n) RETURN labels(n) AS label, count(n) AS count ORDER BY 
 
 
 async def main():
-    async with ToolboxClient(TOOLBOX_URL) as toolbox:
+    async with ToolboxClient(TOOLBOX_URL, protocol=Protocol.MCP_LATEST) as toolbox:
         tools = await toolbox.aload_toolset("crisalid-unrestricted")
         print(f"Loaded {len(tools)} tool(s): {[t.name for t in tools]}")
 

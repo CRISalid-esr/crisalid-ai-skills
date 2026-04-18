@@ -73,7 +73,32 @@ Or pass an env file:
 docker run -p 5000:5000 --env-file mcp-toolbox/.env crisalid-graph-mcp
 ```
 
-The server listens on `http://0.0.0.0:5000` inside the container, exposed on port 5000.
+The server listens on `0.0.0.0:5000` inside the container, exposed on port 5000.
+
+<details>
+<summary>Local dev example (Neo4j and Keycloak running on host, self-signed cert)</summary>
+
+```bash
+docker run -p 5000:5000 \
+  -e NEO4J_URI=bolt://host.docker.internal:7687 \
+  -e NEO4J_USER=neo4j \
+  -e NEO4J_PASSWORD=<password> \
+  -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/<realm> \
+  -e KEYCLOAK_CLIENT_ID=<client-id> \
+  -e KEYCLOAK_CLIENT_SECRET=<secret> \
+  -e KEYCLOAK_SSL_VERIFY=false \
+  --add-host=host.docker.internal:host-gateway \
+  --add-host=keycloak.local:<host-ip> \
+  -v /tmp/keycloak-local.crt:/usr/local/share/ca-certificates/custom-ca.crt \
+  crisalid-graph-mcp
+```
+
+- `--add-host=host.docker.internal:host-gateway` — lets the container reach services on the host (Neo4j)
+- `--add-host=keycloak.local:<host-ip>` — resolves the Keycloak hostname inside the container
+- `-v /tmp/keycloak-local.crt:...` — mounts the self-signed CA cert so the toolbox can validate Keycloak's TLS
+- `KEYCLOAK_SSL_VERIFY=false` — disables TLS verification in the Python client when fetching tokens
+
+</details>
 
 ### Authentication (Keycloak OIDC)
 

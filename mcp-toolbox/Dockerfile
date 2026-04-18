@@ -29,4 +29,4 @@ ENV KEYCLOAK_SSL_VERIFY=true
 EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["--config", "tools-auth.yaml"]
+CMD ["--address", "0.0.0.0", "--config", "tools-auth.yaml"]
