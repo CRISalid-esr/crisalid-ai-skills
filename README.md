@@ -62,8 +62,6 @@ docker run -p 5000:5000 \
   -e NEO4J_USER=neo4j \
   -e NEO4J_PASSWORD=<password> \
   -e KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm> \
-  -e KEYCLOAK_CLIENT_ID=<client-id> \
-  -e KEYCLOAK_CLIENT_SECRET=<secret> \
   crisalid-graph-mcp
 ```
 
@@ -84,12 +82,8 @@ docker run -p 5000:5000 \
   -e NEO4J_USER=neo4j \
   -e NEO4J_PASSWORD=<password> \
   -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/<realm> \
-  -e KEYCLOAK_CLIENT_ID=<client-id> \
-  -e KEYCLOAK_CLIENT_SECRET=<secret> \
-  -e KEYCLOAK_SSL_VERIFY=false \
   --add-host=host.docker.internal:host-gateway \
   --add-host=keycloak.local:<host-ip> \
-  -v /tmp/keycloak-local.crt:/usr/local/share/ca-certificates/custom-ca.crt \
   crisalid-graph-mcp
 ```
 
@@ -111,12 +105,18 @@ docker run ... \
 
 `tools-auth.yaml` adds a Keycloak OIDC auth layer. Tools marked `authRequired` reject calls without a valid JWT. Clients obtain a token via the `client_credentials` grant (service account) and pass it to the toolbox SDK.
 
-#### Required environment variables (add to `mcp-toolbox/.env`)
+#### Environment variables
 
+**Toolbox server** (`tools-auth.yaml` / Docker):
 ```
 KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
-KEYCLOAK_CLIENT_ID=<your-client-id>
-KEYCLOAK_CLIENT_SECRET=<your-client-secret>
+```
+
+**Sample clients only** (not needed by the server):
+```
+KEYCLOAK_CLIENT_ID=<client-id>
+KEYCLOAK_CLIENT_SECRET=<client-secret>
+KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
 ```
 
 #### Keycloak service account setup
@@ -132,7 +132,7 @@ In Keycloak admin → Clients → Create client:
 
 **2. Add an Audience mapper**
 
-The toolbox validates the JWT `aud` claim against `KEYCLOAK_CLIENT_ID`. By default Keycloak does not include the client ID in `aud`, so this mapper is required.
+The toolbox validates the JWT `aud` claim against the hardcoded audience `crisalid-graph-mcp`. By default Keycloak does not include this in `aud`, so this mapper is required.
 
 In the client's page → Client scopes → click the dedicated scope (`<client-id>-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
 - Name: `mcp-example-client-audience`

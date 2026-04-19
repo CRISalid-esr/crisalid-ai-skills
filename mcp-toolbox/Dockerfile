@@ -18,10 +18,8 @@ ENV NEO4J_URI=
 ENV NEO4J_USER=
 ENV NEO4J_PASSWORD=
 
-# Keycloak OIDC
+# Keycloak OIDC (issuer only — client credentials belong to the calling client, not the server)
 ENV KEYCLOAK_ISSUER=
-ENV KEYCLOAK_CLIENT_ID=
-ENV KEYCLOAK_CLIENT_SECRET=
 
 EXPOSE 5000
 
