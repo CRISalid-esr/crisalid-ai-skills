@@ -4,12 +4,12 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent / ".env")
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from toolbox_core.protocol import Protocol
 from toolbox_langchain import ToolboxClient
+
+load_dotenv(Path(__file__).parent / ".env")
 
 TOOLBOX_URL = "http://127.0.0.1:5000"
 KEYCLOAK_ISSUER = os.environ["KEYCLOAK_ISSUER"]
