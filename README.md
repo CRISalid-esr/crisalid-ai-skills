@@ -95,8 +95,15 @@ docker run -p 5000:5000 \
 
 - `--add-host=host.docker.internal:host-gateway` — lets the container reach services on the host (Neo4j)
 - `--add-host=keycloak.local:<host-ip>` — resolves the Keycloak hostname inside the container
-- `-v /tmp/keycloak-local.crt:...` — mounts the self-signed CA cert so the toolbox can validate Keycloak's TLS
-- `KEYCLOAK_SSL_VERIFY=false` — disables TLS verification in the Python client when fetching tokens
+The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
+
+```bash
+docker run ... \
+  -v /tmp/keycloak-local.crt:/usr/local/share/ca-certificates/custom-ca.crt \
+  --entrypoint sh \
+  crisalid-graph-mcp \
+  -c "update-ca-certificates && toolbox --address 0.0.0.0 --config tools-auth.yaml"
+```
 
 </details>
 

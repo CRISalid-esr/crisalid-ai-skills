@@ -12,8 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 
 COPY tools-auth.yaml .
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 # Neo4j connection
 ENV NEO4J_URI=
@@ -24,9 +22,7 @@ ENV NEO4J_PASSWORD=
 ENV KEYCLOAK_ISSUER=
 ENV KEYCLOAK_CLIENT_ID=
 ENV KEYCLOAK_CLIENT_SECRET=
-ENV KEYCLOAK_SSL_VERIFY=true
 
 EXPOSE 5000
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["--address", "0.0.0.0", "--config", "tools-auth.yaml"]
+CMD ["toolbox", "--address", "0.0.0.0", "--config", "tools-auth.yaml"]
