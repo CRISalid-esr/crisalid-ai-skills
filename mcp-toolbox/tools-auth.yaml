@@ -151,9 +151,7 @@ statement: |
   //   tier 1 — exact phrase, any order:        display_name:"Alice Martinet Dupré"^10
   //   tier 2 — fuzzy AND of ALL tokens:        display_name:(Alice~2 AND Martinet~2 AND Dupré~2)^5
   //   tier 3 — fuzzy AND of first two tokens:  display_name:(Alice~2 AND Martinet~2)^3
-  //             (rescues compound last names: tier 2 fails when the extra part "Dupré" has no match)
   //   tier 4 — second token fuzzy alone:       display_name:Martinet~2
-  //             (last-name-only fallback, anchored on t1 = first part of the last name)
   WITH
     'display_name:"' + input + '"^10 OR display_name:(' +
     reduce(acc = '', t IN tokens | CASE WHEN acc = '' THEN t + '~2' ELSE acc + ' AND ' + t + '~2' END) +
