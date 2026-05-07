@@ -4,6 +4,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+CRISalid manages data through a Neo4j knowledge graph (Cypher + Apollo GraphQL).  
+In the current repository crisalid-ai-skills, the mcp-toolbox module provides two levels of access:
+- `crisalid-unrestricted` toolset with a generic `execute-cypher-readonly` tool for ad-hoc queries
+- `crisalid-restricted` toolset with curated tools like `list-person-publications` 
+
 ## Repository overview
 
 MCP Toolbox tools and sample clients for the CRISalid institutional knowledge graph (Neo4j). Key areas:
@@ -37,9 +42,10 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 
 ## Running tests
 
-Tests require:
+Tests require running processes outside the IDE:
 1. Neo4j on port 7688 (Docker: `neo4j:5-community`, APOC enabled, `NEO4J_AUTH=none`)
-2. Toolbox running against `.env.test`: `set -a && source mcp-toolbox/.env.test && set +a && npx @toolbox-sdk/server --config mcp-toolbox/tools.yaml`
+2. Toolbox running against `.env.test`: `set -a && source mcp-toolbox/.env.test && set +a && ./toolbox --config tools.yaml`
+Don't try to start these from the IDE — just check connectivity before running tests and ask the user to start them if they are not running.
 
 ```bash
 uv run pytest tests/ -v

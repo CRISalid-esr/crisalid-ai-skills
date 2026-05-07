@@ -2,12 +2,19 @@ import json
 import pytest
 
 PERSON_UID = "local-jdurand@univ-domain.edu"
+PERSON_DISPLAY_NAME = "Jeannette Durand"
 
 
 @pytest.fixture
 async def person_tool(toolbox_client):
     tools = await toolbox_client.aload_toolset("crisalid-restricted")
     return next(t for t in tools if t.name == "list-person-publications")
+
+
+@pytest.fixture
+async def search_tool(toolbox_client):
+    tools = await toolbox_client.aload_toolset("crisalid-restricted")
+    return next(t for t in tools if t.name == "search-person-by-name")
 
 
 @pytest.mark.asyncio
@@ -64,3 +71,50 @@ async def test_list_person_publications_contributions_structure(person_tool):
         assert "affiliations" in c
         assert "person" in c
         assert "uid" in c["person"]
+
+
+@pytest.mark.asyncio
+async def test_search_person_by_name_exact(search_tool):
+    result = await search_tool.ainvoke({"name": PERSON_DISPLAY_NAME, "max_results": 5})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert data, "Expected at least one result for exact name"
+    uids = [row["uid"] for row in data]
+    assert PERSON_UID in uids, f"{PERSON_UID} not found in results: {uids}"
+
+
+@pytest.mark.asyncio
+async def test_search_person_by_name_fuzzy(search_tool):
+    result = await search_tool.ainvoke({"name": "Jannete Duran", "max_results": 5})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert data, "Expected at least one result for misspelled name"
+    uids = [row["uid"] for row in data]
+    assert PERSON_UID in uids, f"{PERSON_UID} not found in fuzzy results: {uids}"
+
+
+@pytest.mark.asyncio
+async def test_search_person_by_name_result_structure(search_tool):
+    result = await search_tool.ainvoke({"name": PERSON_DISPLAY_NAME, "max_results": 5})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert data
+    for row in data:
+        assert "uid" in row
+        assert "display_name" in row
+        assert "score" in row
+        assert "identifiers" in row
+        assert "laboratories" in row
+
+
+@pytest.mark.asyncio
+async def test_search_person_by_name_reversed_order(search_tool):
+    result = await search_tool.ainvoke({"name": "Durand Jeannette", "max_results": 5})
+    data = json.loads(result) if isinstance(result, str) else result
+    uids = [row["uid"] for row in data]
+    assert PERSON_UID in uids, f"{PERSON_UID} not found when name is reversed: {uids}"
+
+
+@pytest.mark.asyncio
+async def test_search_person_by_name_last_name_only(search_tool):
+    result = await search_tool.ainvoke({"name": "Durand", "max_results": 5})
+    data = json.loads(result) if isinstance(result, str) else result
+    uids = [row["uid"] for row in data]
+    assert PERSON_UID in uids, f"{PERSON_UID} not found when searching by last name only: {uids}"
