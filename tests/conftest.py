@@ -28,6 +28,11 @@ def load_fixtures():
             statement = statement.strip()
             if statement:
                 session.run(statement)
+        session.run(
+            "CREATE FULLTEXT INDEX person_fulltext_name IF NOT EXISTS "
+            "FOR (p:Person) ON EACH [p.display_name, p.display_name_variants] "
+            "OPTIONS { indexConfig: { `fulltext.analyzer`: 'standard-no-stop-words' } }"
+        )
     driver.close()
 
 

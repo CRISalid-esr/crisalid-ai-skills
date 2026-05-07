@@ -121,6 +121,63 @@ statement: |
 
 ---
 
+kind: tool
+name: search-person-by-name
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Search for a person in the CRISalid knowledge graph by display name.
+  Handles any word order, single last name, accent variants, misspellings,
+  and hyphenated compound names (e.g. "Martinet-Dupré" still matches "Martinet").
+  Returns candidates ranked by relevance score, each with uid, identifiers, and
+  laboratory membership.
+parameters:
+  - name: name
+    type: string
+    description: Name to search for — first name, last name, or both in any order; misspellings and accent variants are tolerated
+  - name: max_results
+    type: integer
+    description: Maximum number of candidates to return
+statement: |
+  WITH $name AS raw_input
+  WITH replace(raw_input, '-', ' ') AS input
+  WITH input, split(trim(input), ' ') AS tokens
+  WITH input, tokens,
+       tokens[0] AS t0,
+       CASE WHEN size(tokens) > 1 THEN tokens[1] ELSE tokens[0] END AS t1
+  // Build a 4-tier Lucene query (example input: "Alice Martinet-Dupré"):
+  //   tier 1 — exact phrase, any order:        display_name:"Alice Martinet Dupré"^10
+  //   tier 2 — fuzzy AND of ALL tokens:        display_name:(Alice~2 AND Martinet~2 AND Dupré~2)^5
+  //   tier 3 — fuzzy AND of first two tokens:  display_name:(Alice~2 AND Martinet~2)^3
+  //             (rescues compound last names: tier 2 fails when the extra part "Dupré" has no match)
+  //   tier 4 — second token fuzzy alone:       display_name:Martinet~2
+  //             (last-name-only fallback, anchored on t1 = first part of the last name)
+  WITH
+    'display_name:"' + input + '"^10 OR display_name:(' +
+    reduce(acc = '', t IN tokens | CASE WHEN acc = '' THEN t + '~2' ELSE acc + ' AND ' + t + '~2' END) +
+    ')^5 OR display_name:(' + t0 + '~2 AND ' + t1 + '~2)^3 OR display_name:' + t1 + '~2' AS lucene_query
+  CALL db.index.fulltext.queryNodes('person_fulltext_name', lucene_query)
+  YIELD node AS person, score
+  WITH person, score ORDER BY score DESC LIMIT $max_results
+  OPTIONAL MATCH (person)-[:HAS_IDENTIFIER]->(id:AgentIdentifier)
+  WITH person, score,
+       collect(DISTINCT CASE WHEN id IS NOT NULL THEN {type: id.type, value: id.value} END) AS identifiers
+  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:ResearchUnit)
+  OPTIONAL MATCH (ru)-[:HAS_NAME]->(ru_name:Literal)
+  WITH person, score, identifiers, ru, collect(DISTINCT ru_name.value) AS ru_names
+  RETURN
+    person.uid AS uid,
+    person.display_name AS display_name,
+    person.external AS external,
+    score,
+    identifiers,
+    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, acronym: ru.acronym, names: ru_names} END) AS laboratories
+  ORDER BY score DESC
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -128,6 +185,7 @@ name: crisalid-restricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - search-person-by-name
 
 ---
 
@@ -138,4 +196,5 @@ name: crisalid-unrestricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - search-person-by-name
   - execute-cypher-readonly
