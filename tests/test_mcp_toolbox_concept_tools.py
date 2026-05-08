@@ -137,7 +137,7 @@ async def test_list_person_concepts_ul_label_always_returned(concept_tool):
     result = await concept_tool.ainvoke({"person_uid": PERSON_UID, "languages": "fr"})
     data = json.loads(result) if isinstance(result, str) else result
     bilingual = next(r for r in data if r["uid"] == CONCEPT_UID_BILINGUAL)
-    null_lang_labels = [l for l in bilingual["pref_labels"] if l["language"] is None]
+    null_lang_labels = [lbl for lbl in bilingual["pref_labels"] if lbl["language"] is None]
     assert null_lang_labels, "Expected at least one pref label with null language (originally 'ul')"
 
 
@@ -146,10 +146,10 @@ async def test_list_person_concepts_ul_label_language_is_null(concept_tool):
     # 'ul' tags must be replaced with null — no label should have language == 'ul'
     result = await concept_tool.ainvoke({"person_uid": PERSON_UID, "languages": "de"})
     data = json.loads(result) if isinstance(result, str) else result
-    all_labels = [l for row in data for l in row.get("pref_labels", [])]
-    assert all(l["language"] != "ul" for l in all_labels), "No label should carry language='ul'"
+    all_labels = [lbl for row in data for lbl in row.get("pref_labels", [])]
+    assert all(lbl["language"] != "ul" for lbl in all_labels), "No label should carry language='ul'"
     bilingual = next(r for r in data if r["uid"] == CONCEPT_UID_BILINGUAL)
-    null_lang_labels = [l for l in bilingual["pref_labels"] if l["language"] is None]
+    null_lang_labels = [lbl for lbl in bilingual["pref_labels"] if lbl["language"] is None]
     assert null_lang_labels, "Expected the 'ul' label returned as null language on c3"
 
 

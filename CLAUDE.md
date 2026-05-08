@@ -40,6 +40,14 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 - Toolbox listens on `0.0.0.0:5000` (required for Docker port mapping — default is `127.0.0.1`)
 - No entrypoint — plain `CMD`. For self-signed KC cert in local dev, override entrypoint with `update-ca-certificates && toolbox ...`
 
+## Linting
+
+Run ruff before every commit:
+
+```bash
+uv run ruff check .
+```
+
 ## Running tests
 
 Tests require running processes outside the IDE:
