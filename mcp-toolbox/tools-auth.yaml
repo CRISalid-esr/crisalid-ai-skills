@@ -122,6 +122,79 @@ statement: |
 ---
 
 kind: tool
+name: list-person-concepts
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  List the research concepts (SKOS subjects) associated with a person's publications,
+  ranked by prominence (most frequently tagged first).
+  Each concept includes its uid, URI (if a controlled-vocabulary concept), preferred
+  labels, and the uids of the tagged documents.
+  Preferred labels are returned in the requested languages; if none match, English is
+  used as a fallback, and if English is also absent all available labels are returned
+  (up to 3). Alternative labels are returned only when explicitly requested.
+
+  IMPORTANT — noise in results: the underlying bibliographic data is harvested from
+  multiple sources and is not curated. As a result, some returned concepts may be
+  generic document-type labels (e.g. "Thèses et écrits académiques", "Actes de
+  congrès") or overly broad domain labels (e.g. "Sociologie", "Sciences humaines")
+  rather than genuine research topics. Clients should treat these with low confidence
+  and may choose to ignore them or deprioritise them when presenting results to users.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+  - name: languages
+    type: string
+    description: Comma-separated preferred language codes, ISO 639-1 (e.g. "en" or "en,fr")
+    default: "en"
+  - name: include_alt_labels
+    type: integer
+    description: Set to 1 to include alternative labels (skos:altLabel) for each concept, 0 to omit
+    default: 0
+  - name: limit
+    type: integer
+    description: Maximum number of concepts to return, ranked by prominence
+    default: 15
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  MATCH (doc)-[:HAS_SUBJECT]->(concept:Concept)
+  WITH concept, collect(DISTINCT doc.uid) AS document_uids, count(DISTINCT doc) AS doc_count
+  ORDER BY doc_count DESC
+  LIMIT $limit
+  OPTIONAL MATCH (concept)-[:HAS_PREF_LABEL]->(pl:Literal {type: 'concept_pref_label'})
+  WITH concept, document_uids,
+       collect(DISTINCT {value: pl.value, language: CASE WHEN pl.language = 'ul' THEN null ELSE pl.language END}) AS all_pref_labels
+  WITH concept, document_uids, all_pref_labels,
+       [l IN all_pref_labels WHERE l.language IN split($languages, ',')] AS requested_pref_labels,
+       [l IN all_pref_labels WHERE l.language = 'en'] AS en_pref_labels,
+       [l IN all_pref_labels WHERE l.language IS NULL] AS undetermined_pref_labels
+  WITH concept, document_uids, undetermined_pref_labels,
+       CASE
+         WHEN size(requested_pref_labels) > 0 THEN requested_pref_labels
+         WHEN size(en_pref_labels) > 0 THEN en_pref_labels
+         ELSE [l IN all_pref_labels WHERE l.language IS NOT NULL][..3]
+       END AS lang_pref_labels
+  WITH concept, document_uids,
+       lang_pref_labels + [l IN undetermined_pref_labels WHERE NOT l IN lang_pref_labels] AS pref_labels
+  OPTIONAL MATCH (concept)-[:HAS_ALT_LABEL]->(al:Literal {type: 'concept_alt_label'})
+  WITH concept, document_uids, pref_labels,
+       collect(DISTINCT CASE
+         WHEN al IS NOT NULL AND $include_alt_labels = 1
+         THEN {value: al.value, language: CASE WHEN al.language = 'ul' THEN null ELSE al.language END}
+       END) AS alt_labels
+  RETURN
+    concept.uid AS uid,
+    concept.uri AS uri,
+    pref_labels,
+    alt_labels,
+    document_uids
+
+---
+
+kind: tool
 name: search-person-by-name
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -183,6 +256,7 @@ name: crisalid-restricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - list-person-concepts
   - search-person-by-name
 
 ---
@@ -194,5 +268,6 @@ name: crisalid-unrestricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - list-person-concepts
   - search-person-by-name
   - execute-cypher-readonly

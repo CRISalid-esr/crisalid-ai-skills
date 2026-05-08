@@ -22,7 +22,7 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 
 | Toolset | Tools |
 |---|---|
-| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` |
+| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications`, `list-person-concepts`, `search-person-by-name` |
 | `crisalid-unrestricted` | above + `execute-cypher-readonly` |
 
 ## Authentication
@@ -40,11 +40,19 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 - Toolbox listens on `0.0.0.0:5000` (required for Docker port mapping — default is `127.0.0.1`)
 - No entrypoint — plain `CMD`. For self-signed KC cert in local dev, override entrypoint with `update-ca-certificates && toolbox ...`
 
+## Linting
+
+Run ruff before every commit:
+
+```bash
+uv run ruff check .
+```
+
 ## Running tests
 
 Tests require running processes outside the IDE:
 1. Neo4j on port 7688 (Docker: `neo4j:5-community`, APOC enabled, `NEO4J_AUTH=none`)
-2. Toolbox running against `.env.test`: `set -a && source mcp-toolbox/.env.test && set +a && ./toolbox --config tools.yaml`
+2. Toolbox running against `.env.test`: `set -a && source .env.test && set +a && ./toolbox --config tools.yaml`
 Don't try to start these from the IDE — just check connectivity before running tests and ask the user to start them if they are not running.
 
 ```bash
@@ -70,3 +78,12 @@ The graph loosely follows the **CERIF-2** data model (an emerging RDF model), bu
 - **External people** (not belonging to our university) are `Person` nodes tagged with `external=true`.
 - **Documents** (publications) are assembled from `SourceRecord` nodes harvested from various bibliographic platforms (HAL, ScanR, etc.).
 - The **source layer** uses a `Source` prefix for convenience nodes: `SourceJournal`, `SourcePersonIdentifier`, `SourceContribution`, etc. This prefix is a local convention — it does NOT map to the CERIF-2 `Source` concept.
+- **Person name properties**: `Person` nodes carry `display_name` (canonical string) and `display_name_variants` (list). A full-text index `person_fulltext_name` covers both with the `standard-no-stop-words` analyzer — use `CALL db.index.fulltext.queryNodes('person_fulltext_name', ...)` for fuzzy name search.
+- **ResearchUnit name storage**: `ResearchUnit` nodes carry only `uid` and `acronym` directly. The human-readable name is a `Literal` node reached via `(ru)-[:HAS_NAME]->(name:Literal)`. This differs from `AuthorityOrganization`, which stores `display_names` as a property array directly on the node.
+- **Person → lab membership**: `(p:Person)-[:MEMBER_OF]->(ru:ResearchUnit)`.
+- **Concepts (SKOS-based subjects)**: `Concept` nodes carry a `uid` and, for controlled-vocabulary entries, a `uri`. Labels are `Literal` nodes:
+  - Preferred labels: `(concept)-[:HAS_PREF_LABEL]->(l:Literal {type: 'concept_pref_label'})` — `l.language` is a 2-letter ISO-639-1 code or `'und'` for undetermined.
+  - Alternative labels: `(concept)-[:HAS_ALT_LABEL]->(l:Literal {type: 'concept_alt_label'})`.
+  - **Genuine vs. legacy**: genuine concepts have a `uri`; legacy pseudo-concepts (free-form keywords ingested before the controlled vocabulary was in place) have `uid` only, a single `prefLabel`, and no `altLabel`.
+  - Concepts are linked to documents via `(doc:Document)-[:HAS_SUBJECT]->(concept:Concept)`.
+  - **Distinction from taxonomy terms**: Domains, Fields, Sub-fields and Topics (OpenAlex taxonomy) are also typed as `Concept` in the graph. Topics are linked to publications via `HAS_TOPICS` (not `HAS_SUBJECT`); higher levels are not yet linked. The `list-person-concepts` tool uses only `HAS_SUBJECT`, which naturally excludes taxonomy terms.
