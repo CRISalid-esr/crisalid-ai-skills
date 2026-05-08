@@ -145,21 +145,24 @@ statement: |
   LIMIT $limit
   OPTIONAL MATCH (concept)-[:HAS_PREF_LABEL]->(pl:Literal {type: 'concept_pref_label'})
   WITH concept, document_uids,
-       collect(DISTINCT {value: pl.value, language: pl.language}) AS all_pref_labels
+       collect(DISTINCT {value: pl.value, language: CASE WHEN pl.language = 'ul' THEN null ELSE pl.language END}) AS all_pref_labels
   WITH concept, document_uids, all_pref_labels,
        [l IN all_pref_labels WHERE l.language IN split($languages, ',')] AS requested_pref_labels,
-       [l IN all_pref_labels WHERE l.language = 'en'] AS en_pref_labels
-  WITH concept, document_uids,
+       [l IN all_pref_labels WHERE l.language = 'en'] AS en_pref_labels,
+       [l IN all_pref_labels WHERE l.language IS NULL] AS undetermined_pref_labels
+  WITH concept, document_uids, undetermined_pref_labels,
        CASE
          WHEN size(requested_pref_labels) > 0 THEN requested_pref_labels
          WHEN size(en_pref_labels) > 0 THEN en_pref_labels
-         ELSE all_pref_labels[..3]
-       END AS pref_labels
+         ELSE [l IN all_pref_labels WHERE l.language IS NOT NULL][..3]
+       END AS lang_pref_labels
+  WITH concept, document_uids,
+       lang_pref_labels + [l IN undetermined_pref_labels WHERE NOT l IN lang_pref_labels] AS pref_labels
   OPTIONAL MATCH (concept)-[:HAS_ALT_LABEL]->(al:Literal {type: 'concept_alt_label'})
   WITH concept, document_uids, pref_labels,
        collect(DISTINCT CASE
          WHEN al IS NOT NULL AND $include_alt_labels = 1
-         THEN {value: al.value, language: al.language}
+         THEN {value: al.value, language: CASE WHEN al.language = 'ul' THEN null ELSE al.language END}
        END) AS alt_labels
   RETURN
     concept.uid AS uid,

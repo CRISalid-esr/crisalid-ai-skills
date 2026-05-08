@@ -41,12 +41,14 @@ MERGE (c2)-[:HAS_ALT_LABEL]->(c2al1)
 CREATE (c3:Concept {uid: 'http://www.wikidata.org/entity/Q210521', uri: 'http://www.wikidata.org/entity/Q210521'})
 CREATE (c3pl1:Literal {language: 'fr', value: 'résolution numérique', type: 'concept_pref_label'})
 CREATE (c3pl2:Literal {language: 'en', value: 'image resolution', type: 'concept_pref_label'})
+CREATE (c3pl3:Literal {language: 'ul', value: 'image resolution (undetermined)', type: 'concept_pref_label'})
 
 CREATE (c3al1:Literal {language: 'en', value: 'pixel count', type: 'concept_alt_label'})
 CREATE (c3al2:Literal {language: 'en', value: 'resolution', type: 'concept_alt_label'})
 
 MERGE (c3)-[:HAS_PREF_LABEL]->(c3pl1)
 MERGE (c3)-[:HAS_PREF_LABEL]->(c3pl2)
+MERGE (c3)-[:HAS_PREF_LABEL]->(c3pl3)
 MERGE (c3)-[:HAS_ALT_LABEL]->(c3al1)
 MERGE (c3)-[:HAS_ALT_LABEL]->(c3al2)
 

@@ -132,6 +132,28 @@ async def test_list_person_concepts_custom_limit(concept_tool):
 
 
 @pytest.mark.asyncio
+async def test_list_person_concepts_ul_label_always_returned(concept_tool):
+    # c3 has FR, EN, and UL pref labels; requesting French should still return the UL label (as null language)
+    result = await concept_tool.ainvoke({"person_uid": PERSON_UID, "languages": "fr"})
+    data = json.loads(result) if isinstance(result, str) else result
+    bilingual = next(r for r in data if r["uid"] == CONCEPT_UID_BILINGUAL)
+    null_lang_labels = [l for l in bilingual["pref_labels"] if l["language"] is None]
+    assert null_lang_labels, "Expected at least one pref label with null language (originally 'ul')"
+
+
+@pytest.mark.asyncio
+async def test_list_person_concepts_ul_label_language_is_null(concept_tool):
+    # 'ul' tags must be replaced with null — no label should have language == 'ul'
+    result = await concept_tool.ainvoke({"person_uid": PERSON_UID, "languages": "de"})
+    data = json.loads(result) if isinstance(result, str) else result
+    all_labels = [l for row in data for l in row.get("pref_labels", [])]
+    assert all(l["language"] != "ul" for l in all_labels), "No label should carry language='ul'"
+    bilingual = next(r for r in data if r["uid"] == CONCEPT_UID_BILINGUAL)
+    null_lang_labels = [l for l in bilingual["pref_labels"] if l["language"] is None]
+    assert null_lang_labels, "Expected the 'ul' label returned as null language on c3"
+
+
+@pytest.mark.asyncio
 async def test_list_person_concepts_document_uids_in_result(concept_tool):
     result = await concept_tool.ainvoke({"person_uid": PERSON_UID})
     data = json.loads(result) if isinstance(result, str) else result
