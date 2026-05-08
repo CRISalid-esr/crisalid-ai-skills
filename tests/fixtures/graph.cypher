@@ -27,23 +27,23 @@ MERGE (in)-[:HAS_NAME]->(inn)
 MERGE (p)-[:EMPLOYED_AT {position_code: 'PR'}]->(in)
 
 CREATE (c1:Concept {uid: 'http://www.idref.fr/02734004x/id', uri: 'http://www.idref.fr/02734004x/id'})
-CREATE (c1pl1:Literal {value: 'Analyse des données', language: 'fr'})
+CREATE (c1pl1:Literal {value: 'Analyse des données', language: 'fr', type: 'concept_pref_label'})
 
 MERGE (c1)-[:HAS_PREF_LABEL]->(c1pl1)
 
 CREATE (c2:Concept {uid: 'http://www.idref.fr/027818055/id', uri: 'http://www.idref.fr/027818055/id'})
-CREATE (c2pl1:Literal {language: 'fr', value: 'Matière interstellaire'})
-CREATE (c2al1:Literal {value: 'Milieu interstellaire', language: 'fr'})
+CREATE (c2pl1:Literal {language: 'fr', value: 'Matière interstellaire', type: 'concept_pref_label'})
+CREATE (c2al1:Literal {value: 'Milieu interstellaire', language: 'fr', type: 'concept_alt_label'})
 
 MERGE (c2)-[:HAS_PREF_LABEL]->(c2pl1)
 MERGE (c2)-[:HAS_ALT_LABEL]->(c2al1)
 
 CREATE (c3:Concept {uid: 'http://www.wikidata.org/entity/Q210521', uri: 'http://www.wikidata.org/entity/Q210521'})
-CREATE (c3pl1:Literal {language: 'fr', value: 'résolution numérique'})
-CREATE (c3pl2:Literal {language: 'en', value: 'image resolution'})
+CREATE (c3pl1:Literal {language: 'fr', value: 'résolution numérique', type: 'concept_pref_label'})
+CREATE (c3pl2:Literal {language: 'en', value: 'image resolution', type: 'concept_pref_label'})
 
-CREATE (c3al1:Literal {language: 'en', value: 'pixel count'})
-CREATE (c3al2:Literal {language: 'en', value: 'resolution'})
+CREATE (c3al1:Literal {language: 'en', value: 'pixel count', type: 'concept_alt_label'})
+CREATE (c3al2:Literal {language: 'en', value: 'resolution', type: 'concept_alt_label'})
 
 MERGE (c3)-[:HAS_PREF_LABEL]->(c3pl1)
 MERGE (c3)-[:HAS_PREF_LABEL]->(c3pl2)
@@ -254,4 +254,12 @@ MERGE (p)-[:HAS_CONTRIBUTION]->(c_doc_2)
 // - contribution 2 attached to a ROOT
 MERGE (c_doc_1)-[:HAS_AFFILIATION_STATEMENT]->(ao_state_1)
 MERGE (c_doc_2)-[:HAS_AFFILIATION_STATEMENT]->(ao_root)
+
+// --- Legacy pseudo-concept (free-form keyword, no URI, single pref label, no alt label) ---
+CREATE (c4:Concept {uid: 'keyword:open-access'})
+CREATE (c4pl1:Literal {value: 'Open access', language: 'en', type: 'concept_pref_label'})
+MERGE (c4)-[:HAS_PREF_LABEL]->(c4pl1)
+WITH c4
+MATCH (doc:Document {uid: 'doc1'})
+CREATE (doc)-[:HAS_SUBJECT]->(c4)
 

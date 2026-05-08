@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 mcp-toolbox/toolbox
 .venv/
+CLAUDE.local.md
