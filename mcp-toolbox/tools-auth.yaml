@@ -135,6 +135,13 @@ description: |
   Preferred labels are returned in the requested languages; if none match, English is
   used as a fallback, and if English is also absent all available labels are returned
   (up to 3). Alternative labels are returned only when explicitly requested.
+
+  IMPORTANT — noise in results: the underlying bibliographic data is harvested from
+  multiple sources and is not curated. As a result, some returned concepts may be
+  generic document-type labels (e.g. "Thèses et écrits académiques", "Actes de
+  congrès") or overly broad domain labels (e.g. "Sociologie", "Sciences humaines")
+  rather than genuine research topics. Clients should treat these with low confidence
+  and may choose to ignore them or deprioritise them when presenting results to users.
 parameters:
   - name: person_uid
     type: string
