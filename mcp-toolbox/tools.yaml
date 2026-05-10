@@ -38,15 +38,38 @@ type: neo4j-cypher
 source: crisalid-neo4j
 description: |
   List all publications for a person identified by their uid.
-  Returns for each document: titles, journal channel (volume/issue/pages + identifiers),
-  source records (harvester metadata only — no SourceJournal or SourceContribution),
-  and co-authors with their institutional affiliation statements.
+  Returns for each document: uid, one title, and publication date.
+  Use get-publication with a document uid to retrieve full details.
 parameters:
   - name: person_uid
     type: string
     description: Unique identifier of the person (Person.uid)
 statement: |
   MATCH (person:Person {uid: $person_uid})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH doc, collect(t.value)[0] AS title
+  RETURN doc.uid AS uid,
+         title,
+         doc.publication_date AS publication_date
+  ORDER BY doc.publication_date DESC
+
+---
+
+kind: tool
+name: get-publication
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return full details for a document identified by its uid.
+  Returns titles, journal channel (volume/issue/pages + identifiers),
+  source records (harvester metadata only — no SourceJournal or SourceContribution),
+  and co-authors with their institutional affiliation statements.
+parameters:
+  - name: uid
+    type: string
+    description: Unique identifier of the document (Document.uid)
+statement: |
+  MATCH (doc:Document {uid: $uid})
   CALL {
     WITH doc
     OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
@@ -105,7 +128,6 @@ statement: |
          doc.oa_status AS oa_status,
          doc.upw_oa_status AS upw_oa_status,
          titles, abstracts, publication_channels, source_records, contributions
-  ORDER BY doc.publication_date DESC
 
 ---
 
@@ -240,6 +262,7 @@ name: crisalid-restricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - get-publication
   - list-person-concepts
   - search-person-by-name
 
@@ -252,6 +275,7 @@ name: crisalid-unrestricted
 tools:
   - get-crisalid-schema
   - list-person-publications
+  - get-publication
   - list-person-concepts
   - search-person-by-name
   - execute-cypher-readonly
