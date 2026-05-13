@@ -22,9 +22,19 @@ First, install the toolbox. Two options:
 npx @toolbox-sdk/server --config tools.yaml
 ```
 
-**Via binary (Linux):** download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
+**Via binary (Linux):** 
 
-Then set your environment variables and start the server:
+Either download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
+Or directly run this from folder "mcp-toolbox":
+```bash
+export VERSION=1.2.0
+curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
+chmod +x toolbox
+```
+
+Then set your environment variables in a .env file, by copying and filling the .env.sample.
+
+Finally, start the server:
 
 ```bash
 cd mcp-toolbox
