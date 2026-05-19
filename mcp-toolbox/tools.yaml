@@ -319,6 +319,65 @@ statement: |
 
 ---
 
+kind: tool
+name: get-institution-locations
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return location data (coordinates and physical address) for one or more affiliation
+  institutions identified by their UIDs. UIDs refer to AuthorityOrganization nodes —
+  either Root or State subtypes — as returned by tools such as list-person-collaborators.
+  One entry is returned per input UID, including empty location fields when the institution
+  is not found or has no location data.
+parameters:
+  - name: institution_uids
+    type: string
+    description: UID or comma-separated list of UIDs of the affiliation institutions (AuthorityOrganization.uid)
+statement: |
+  WITH split($institution_uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH trim(raw_uid) AS institution_uid
+  OPTIONAL MATCH (org:AuthorityOrganization {uid: institution_uid})
+  OPTIONAL MATCH (org)-[:HAS_POS]->(place:Place)
+  WITH institution_uid, org,
+       collect(DISTINCT CASE WHEN place IS NOT NULL
+         THEN {latitude: place.latitude, longitude: place.longitude} END) AS coordinates
+  OPTIONAL MATCH (org)-[:HAS_ADDRESS]->(addr:StructuredPhysicalAddress)
+  OPTIONAL MATCH (addr)-[:HAS_STREET]->(street:Literal {type: 'institution_street_name'})
+  OPTIONAL MATCH (addr)-[:HAS_CITY]->(city:Literal {type: 'institution_city_name'})
+  OPTIONAL MATCH (addr)-[:HAS_ZIP_CODE]->(zip:Literal {type: 'institution_zip_code'})
+  OPTIONAL MATCH (addr)-[:HAS_STATE]->(state_lit:Literal {type: 'institution_state_name'})
+  OPTIONAL MATCH (addr)-[:HAS_COUNTRY]->(country:Literal {type: 'institution_country_name'})
+  OPTIONAL MATCH (addr)-[:HAS_CONTINENT]->(continent:Literal {type: 'institution_continent_name'})
+  WITH institution_uid, org, coordinates, addr,
+       collect(DISTINCT CASE WHEN street IS NOT NULL
+         THEN {value: street.value, language: coalesce(street.language, 'und')} END) AS streets,
+       collect(DISTINCT CASE WHEN city IS NOT NULL
+         THEN {value: city.value, language: coalesce(city.language, 'und')} END) AS cities,
+       collect(DISTINCT CASE WHEN zip IS NOT NULL
+         THEN {value: zip.value, language: coalesce(zip.language, 'und')} END) AS zip_codes,
+       collect(DISTINCT CASE WHEN state_lit IS NOT NULL
+         THEN {value: state_lit.value, language: coalesce(state_lit.language, 'und')} END) AS states,
+       collect(DISTINCT CASE WHEN country IS NOT NULL
+         THEN {value: country.value, language: coalesce(country.language, 'und')} END) AS countries,
+       collect(DISTINCT CASE WHEN continent IS NOT NULL
+         THEN {value: continent.value, language: coalesce(continent.language, 'und')} END) AS continents
+  RETURN
+      institution_uid AS uid,
+      org.display_names AS display_names,
+      coordinates,
+      collect(DISTINCT CASE WHEN addr IS NOT NULL THEN {
+          uid: addr.uid,
+          street: streets,
+          city: cities,
+          zip_code: zip_codes,
+          state_or_province: states,
+          country: countries,
+          continent: continents
+      } END) AS addresses
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -330,6 +389,7 @@ tools:
   - list-person-concepts
   - search-person-by-name
   - list-person-collaborators
+  - get-institution-locations
 
 ---
 
@@ -344,4 +404,5 @@ tools:
   - list-person-concepts
   - search-person-by-name
   - list-person-collaborators
+  - get-institution-locations
   - execute-cypher-readonly

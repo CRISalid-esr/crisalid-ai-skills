@@ -280,3 +280,21 @@ MERGE (doc)-[:HAS_CONTRIBUTION]->(c_doc_3)
 MERGE (p2)-[:HAS_CONTRIBUTION]->(c_doc_3)
 MERGE (c_doc_3)-[:HAS_AFFILIATION_STATEMENT]->(ao_s1)
 
+// --- Location data for authority organizations ---
+WITH p2
+MATCH (ao_s1:AuthorityOrganizationState {uid: 'ao-state-1'})
+MATCH (ao_r1:AuthorityOrganizationRoot {uid: 'ao-root-1'})
+CREATE (place1:Place {latitude: 48.8534, longitude: 2.3488})
+CREATE (place2:Place {latitude: 48.8566, longitude: 2.3522})
+CREATE (addr1:StructuredPhysicalAddress {uid: 'addr-ao-state-1'})
+CREATE (addr1_city:Literal {type: 'institution_city_name', value: 'Paris', language: 'fr'})
+CREATE (addr1_zip:Literal {type: 'institution_zip_code', value: '75005', language: 'ul'})
+CREATE (addr1_country:Literal {type: 'institution_country_name', value: 'France', language: 'fr'})
+MERGE (ao_s1)-[:HAS_POS]->(place1)
+MERGE (ao_r1)-[:HAS_POS]->(place1)
+MERGE (ao_r1)-[:HAS_POS]->(place2)
+MERGE (ao_s1)-[:HAS_ADDRESS]->(addr1)
+MERGE (addr1)-[:HAS_CITY]->(addr1_city)
+MERGE (addr1)-[:HAS_ZIP_CODE]->(addr1_zip)
+MERGE (addr1)-[:HAS_COUNTRY]->(addr1_country)
+
