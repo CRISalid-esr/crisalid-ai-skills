@@ -255,6 +255,70 @@ statement: |
 
 ---
 
+kind: tool
+name: list-person-collaborators
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  List the collaborators of a person — defined as people who co-authored at least
+  one Document with them. Results are ordered by number of shared publications
+  (descending) and capped at 15.
+  Each entry includes the collaborator's uid, display name, names (first/last),
+  whether they are internal or external, and the list of shared document titles.
+  Affiliations (from co-author contribution statements) are included only when
+  explicitly requested.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+  - name: start_date
+    type: string
+    description: "Filter collaborations from this date onward (ISO 8601, e.g. '2020-01-01'). Leave empty for no lower bound."
+    default: ""
+  - name: end_date
+    type: string
+    description: "Filter collaborations up to this date (ISO 8601). Defaults to today when start_date is provided but end_date is omitted. Leave empty for no upper bound."
+    default: ""
+  - name: include_affiliations
+    type: integer
+    description: Set to 1 to include each collaborator's institutional affiliations, 0 to omit
+    default: 0
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE ($start_date = '' OR doc.publication_date >= $start_date)
+    AND (CASE
+      WHEN $end_date = '' AND $start_date <> '' THEN doc.publication_date <= toString(date())
+      WHEN $end_date <> '' THEN doc.publication_date <= $end_date
+      ELSE true
+    END)
+  MATCH (doc)-[:HAS_CONTRIBUTION]->(collab_contrib:Contribution)<-[:HAS_CONTRIBUTION]-(collaborator:Person)
+  WHERE collaborator <> person
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH collaborator, collab_contrib, doc, collect(t.value)[0] AS doc_title
+  OPTIONAL MATCH (collab_contrib)-[:HAS_AFFILIATION_STATEMENT]->(org:AuthorityOrganization)
+  WITH collaborator,
+       collect(DISTINCT {uid: doc.uid, title: doc_title}) AS shared_docs,
+       collect(DISTINCT CASE WHEN org IS NOT NULL
+         THEN {uid: org.uid, display_names: org.display_names} END) AS affiliations
+  ORDER BY size(shared_docs) DESC
+  LIMIT 15
+  OPTIONAL MATCH (collaborator)-[:HAS_NAME]->(pn:PersonName)
+  OPTIONAL MATCH (pn)-[:HAS_FIRST_NAME]->(fn:Literal)
+  OPTIONAL MATCH (pn)-[:HAS_LAST_NAME]->(ln:Literal)
+  WITH collaborator, shared_docs, affiliations,
+       collect(DISTINCT CASE WHEN fn IS NOT NULL OR ln IS NOT NULL
+         THEN {first_name: fn.value, last_name: ln.value} END) AS names
+  RETURN
+    collaborator.uid AS uid,
+    collaborator.display_name AS display_name,
+    collaborator.external AS external,
+    names,
+    shared_docs,
+    CASE WHEN $include_affiliations = 1 THEN affiliations ELSE [] END AS affiliations
+  ORDER BY size(shared_docs) DESC
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -265,6 +329,7 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - list-person-collaborators
 
 ---
 
@@ -278,4 +343,5 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - list-person-collaborators
   - execute-cypher-readonly
