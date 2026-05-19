@@ -95,18 +95,18 @@ async def test_list_person_collaborators_with_affiliations(collaborator_tool):
 async def test_list_person_collaborators_start_date_future_returns_empty(collaborator_tool):
     result = await collaborator_tool.ainvoke({"person_uid": PERSON_UID, "start_date": "2099-01-01"})
     data = json.loads(result) if isinstance(result, str) else result
-    assert data == [], "Expected empty result when start_date is far in the future"
+    assert not data, "Expected empty result when start_date is far in the future"
 
 
 @pytest.mark.asyncio
 async def test_list_person_collaborators_end_date_before_publication_returns_empty(collaborator_tool):
     result = await collaborator_tool.ainvoke({"person_uid": PERSON_UID, "end_date": "2000-01-01"})
     data = json.loads(result) if isinstance(result, str) else result
-    assert data == [], "Expected empty result when end_date is before all publications"
+    assert not data, "Expected empty result when end_date is before all publications"
 
 
 @pytest.mark.asyncio
 async def test_list_person_collaborators_unknown_person_returns_empty(collaborator_tool):
     result = await collaborator_tool.ainvoke({"person_uid": "unknown-person-uid"})
     data = json.loads(result) if isinstance(result, str) else result
-    assert data == [], "Expected empty result for unknown person uid"
+    assert not data, "Expected empty result for unknown person uid"
