@@ -241,16 +241,19 @@ statement: |
   OPTIONAL MATCH (person)-[:HAS_IDENTIFIER]->(id:AgentIdentifier)
   WITH person, score,
        collect(DISTINCT CASE WHEN id IS NOT NULL THEN {type: id.type, value: id.value} END) AS identifiers
-  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:ResearchUnit)
-  OPTIONAL MATCH (ru)-[:HAS_NAME]->(ru_name:Literal)
-  WITH person, score, identifiers, ru, collect(DISTINCT ru_name.value) AS ru_names
+  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:OrganizationUnit)
+  OPTIONAL MATCH (ru)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+  OPTIONAL MATCH (ru)-[:HAS_SHORT_LABEL]->(sl:Literal {type: 'organization_short_label'})
+  WITH person, score, identifiers, ru,
+       collect(DISTINCT CASE WHEN ll IS NOT NULL THEN ll.value END) AS long_labels,
+       collect(DISTINCT CASE WHEN sl IS NOT NULL THEN sl.value END) AS short_labels
   RETURN
     person.uid AS uid,
     person.display_name AS display_name,
     person.external AS external,
     score,
     identifiers,
-    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, acronym: ru.acronym, names: ru_names} END) AS laboratories
+    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, long_labels: long_labels, short_labels: short_labels} END) AS laboratories
   ORDER BY score DESC
 
 ---
@@ -378,6 +381,34 @@ statement: |
 
 ---
 
+kind: tool
+name: get-person-memberships
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return the OrganizationUnit(s) that a person is directly a member of,
+  as recorded in the institution's directory (MEMBER_OF relationships).
+  Each entry includes the unit UID and its human-readable labels (long name
+  and short name/acronym), which may be available in multiple languages.
+  Returns an empty list if the person has no direct memberships.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:MEMBER_OF]->(org:OrganizationUnit)
+  OPTIONAL MATCH (org)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+  OPTIONAL MATCH (org)-[:HAS_SHORT_LABEL]->(sl:Literal {type: 'organization_short_label'})
+  WITH org,
+       collect(DISTINCT CASE WHEN ll IS NOT NULL THEN {value: ll.value, language: ll.language} END) AS long_labels,
+       collect(DISTINCT CASE WHEN sl IS NOT NULL THEN {value: sl.value, language: sl.language} END) AS short_labels
+  RETURN
+    org.uid AS institution_uid,
+    long_labels,
+    short_labels
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -390,6 +421,7 @@ tools:
   - search-person-by-name
   - list-person-collaborators
   - get-institution-locations
+  - get-person-memberships
 
 ---
 
@@ -405,4 +437,5 @@ tools:
   - search-person-by-name
   - list-person-collaborators
   - get-institution-locations
+  - get-person-memberships
   - execute-cypher-readonly

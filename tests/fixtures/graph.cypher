@@ -8,23 +8,25 @@ MERGE (p)-[:HAS_IDENTIFIER]->(i1)
 MERGE (p)-[:HAS_IDENTIFIER]->(i2)
 MERGE (p)-[:HAS_IDENTIFIER]->(i3)
 
-CREATE (rs:Organisation:ResearchUnit {uid: 'local-123456', acronym: 'LRA'})
+CREATE (rs:OrganizationUnit:Unit:ResearchUnit {uid: 'local-ru-123456', generic_type: 'unit', national_type: 'UMR', external: false})
 CREATE (rsi1:AgentIdentifier {type: 'local', value: '123456'})
-CREATE (rsn:Literal {language: 'fr', value: 'Laboratoire de recherche en astrophysique'})
+CREATE (rs_ll:Literal {language: 'fr', value: 'Laboratoire de recherche en astrophysique', type: 'organization_long_label'})
+CREATE (rs_sl:Literal {language: 'fr', value: 'LRA', type: 'organization_short_label'})
 
 MERGE (rs)-[:HAS_IDENTIFIER]->(rsi1)
-MERGE (rs)-[:HAS_NAME]->(rsn)
+MERGE (rs)-[:HAS_LONG_LABEL]->(rs_ll)
+MERGE (rs)-[:HAS_SHORT_LABEL]->(rs_sl)
 
 MERGE (p)-[:MEMBER_OF]->(rs)
 
-CREATE (in:Organisation:Institution {uid: 'local-123456'})
+CREATE (inst:OrganizationUnit:Institution {uid: 'local-inst-234567', generic_type: 'institution', national_type: 'UNIV', external: false})
 CREATE (ini1:AgentIdentifier {type: 'UAI', value: '02345'})
-CREATE (inn:Literal {language: 'fr', value: 'Université de Paris'})
+CREATE (inst_ll:Literal {language: 'fr', value: 'Université de Paris', type: 'organization_long_label'})
 
-MERGE (in)-[:HAS_IDENTIFIER]->(ini1)
-MERGE (in)-[:HAS_NAME]->(inn)
+MERGE (inst)-[:HAS_IDENTIFIER]->(ini1)
+MERGE (inst)-[:HAS_LONG_LABEL]->(inst_ll)
 
-MERGE (p)-[:EMPLOYED_AT {position_code: 'PR'}]->(in)
+MERGE (p)-[:EMPLOYED_AT {position_code: 'PR'}]->(inst)
 
 CREATE (c1:Concept {uid: 'http://www.idref.fr/02734004x/id', uri: 'http://www.idref.fr/02734004x/id'})
 CREATE (c1pl1:Literal {value: 'Analyse des données', language: 'fr', type: 'concept_pref_label'})
