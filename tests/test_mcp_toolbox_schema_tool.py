@@ -1,6 +1,6 @@
 import pytest
 
-EXPECTED_LABELS = {"Person", "Document", "Organisation", "Concept", "Contribution"}
+EXPECTED_LABELS = {"Person", "Document", "OrganizationUnit", "Concept", "Contribution"}
 
 
 @pytest.mark.asyncio
