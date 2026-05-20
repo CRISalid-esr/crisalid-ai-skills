@@ -409,6 +409,49 @@ statement: |
 
 ---
 
+kind: tool
+name: search-researchers-by-concept
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Search for internal researchers who have authored publications related to a
+  given concept or keyword. The concept string is matched as a case-insensitive
+  substring against all concept labels (preferred and alternative, any language)
+  and against free-text keyword labels.
+  Returns one entry per researcher, sorted by number of matching publications
+  (highest first). Only researchers with external: false are included.
+parameters:
+  - name: concept
+    type: string
+    description: Free-text concept to search for — matched as a case-insensitive substring against concept/keyword labels
+  - name: limit
+    type: integer
+    description: Maximum number of researchers to return
+    default: 15
+statement: |
+  MATCH (person:Person {external: false})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  MATCH (doc)-[:HAS_SUBJECT]->(concept:Concept)
+  WHERE (
+    any(v IN [(concept)-[:HAS_PREF_LABEL]->(l) | l.value] WHERE toLower(v) CONTAINS toLower($concept))
+    OR any(v IN [(concept)-[:HAS_ALT_LABEL]->(l) | l.value] WHERE toLower(v) CONTAINS toLower($concept))
+    OR (concept.prefLabel IS NOT NULL AND toLower(concept.prefLabel) CONTAINS toLower($concept))
+  )
+  WITH DISTINCT person, doc
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH person, doc, collect(t.value)[0] AS title
+  WITH person,
+       collect(DISTINCT title) AS publication_titles,
+       count(DISTINCT doc) AS publication_count
+  RETURN
+    person.uid AS researcher_uid,
+    person.display_name AS researcher_name,
+    publication_titles,
+    publication_count
+  ORDER BY publication_count DESC
+  LIMIT $limit
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -422,6 +465,7 @@ tools:
   - list-person-collaborators
   - get-institution-locations
   - get-person-memberships
+  - search-researchers-by-concept
 
 ---
 
@@ -438,4 +482,5 @@ tools:
   - list-person-collaborators
   - get-institution-locations
   - get-person-memberships
+  - search-researchers-by-concept
   - execute-cypher-readonly
