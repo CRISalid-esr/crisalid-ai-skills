@@ -1,4 +1,4 @@
-CREATE (p:Person {uid: 'local-jdurand@univ-domain.edu', display_name: 'Jeannette Durand', display_name_variants: []})
+CREATE (p:Person {uid: 'local-jdurand@univ-domain.edu', display_name: 'Jeannette Durand', display_name_variants: [], external: false})
 
 CREATE (i1:AgentIdentifier {type: 'local', value: 'jdurand@univ-domain.edu'})
 CREATE (i2:AgentIdentifier {type: 'idref', value: '012345678'})
