@@ -265,3 +265,18 @@ WITH c4
 MATCH (doc:Document {uid: 'doc1'})
 CREATE (doc)-[:HAS_SUBJECT]->(c4)
 
+// --- Co-author for doc1 ---
+WITH doc
+MATCH (ao_s1:AuthorityOrganizationState {uid: 'ao-state-1'})
+CREATE (p2:Person {uid: 'local-jmartin@univ-domain.edu', display_name: 'Jean Martin', external: false, display_name_variants: []})
+CREATE (pn3:PersonName)
+CREATE (pn3fn:Literal {language: 'fr', value: 'Jean'})
+CREATE (pn3ln:Literal {language: 'fr', value: 'Martin'})
+MERGE (pn3)-[:HAS_FIRST_NAME]->(pn3fn)
+MERGE (pn3)-[:HAS_LAST_NAME]->(pn3ln)
+MERGE (p2)-[:HAS_NAME]->(pn3)
+CREATE (c_doc_3:Contribution {uid: 'contrib-3', roles: ['AUTHOR']})
+MERGE (doc)-[:HAS_CONTRIBUTION]->(c_doc_3)
+MERGE (p2)-[:HAS_CONTRIBUTION]->(c_doc_3)
+MERGE (c_doc_3)-[:HAS_AFFILIATION_STATEMENT]->(ao_s1)
+
