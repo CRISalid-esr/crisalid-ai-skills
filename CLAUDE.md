@@ -74,11 +74,43 @@ ToolboxClient(TOOLBOX_URL, protocol=Protocol.MCP_LATEST)
 
 The graph loosely follows the **CERIF-2** data model (an emerging RDF model), but without neosemantics or any strict RDF-compliant approach.
 
+### OrganizationUnit hierarchy
+
+Our institution built a hierarchy of **OrganizationUnit** nodes from its internal databases and national registries. Every `OrganizationUnit` node carries the `OrganizationUnit` label plus one or more specific labels indicating its position in the taxonomy:
+
+| Specific labels | `generic_type` | Typical `national_type` | Description |
+|---|---|---|---|
+| `Institution` | `institution` | `UNIV`, `EPE`, `COMUE`, `EPST`, `GE` | University, EPE, COMUE, EPST, or grand établissement |
+| `InstitutionSubdivision` | `institution_subdivision` | `UFR`, `FAC`, `DEP` | A component of an institution (faculty, department…) |
+| `Unit` + `ResearchUnit` | `unit` | `UMR`, `UAR`, `UR`, `IRL` | A research unit |
+| `Unit` + `SupportUnit` | `unit` | — | A support unit |
+| `Unit` + `AdministrativeUnit` | `unit` | — | An administrative unit |
+| `Unit` + `TeachingUnit` | `unit` | — | A teaching unit |
+| `UnitSubdivision` | `unit_subdivision` | — | A subdivision of a unit (research axis…) |
+| `Team` | `team` | `TEAM`, `THEME` | A research team inside a unit |
+
+Each `OrganizationUnit` node has a `uid` (e.g. `local-U123`, `uai-02345`, `ror-xxx`), a `generic_type`, and optionally a `national_type`. It also has an `external` attribute:
+- `external: false` — created from the institution's own directory (authoritative data)
+- `external: true` — auto-created from a national registry to satisfy a relationship target; not directly managed by our institution
+
+**Three-tier typing**: `generic_type` (broad classification per the French *cadre de références des structures de recherche*), `national_type` (officially validated, e.g. `UMR`, `UNIV`, `UFR`), and **local types** (institution-specific labels stored as Literal nodes via `HAS_LOCAL_TYPE`, type `"organization_local_type"`).
+
+**Name/label storage** on `OrganizationUnit` nodes — via Literal or TextLiteral nodes, not direct properties:
+- `HAS_LONG_LABEL` → Literal of type `"organization_long_label"` (full name)
+- `HAS_SHORT_LABEL` → Literal of type `"organization_short_label"` (acronym)
+- `HAS_DESCRIPTION` → TextLiteral (free-text description)
+
+**Relations between OrganizationUnit nodes**:
+- `PART_OF` — structural inclusion (e.g. faculty inside a university, team inside a unit); carries optional `start_date` / `end_date`
+- `MEMBER_OF` — used for two purposes:
+  - **French supervision** (*tutelle*): research unit → supervising institution; carries optional `position` (`main_supervision`, `associated_supervision`, `participating_supervision`) plus `start_date` / `end_date`
+  - **Structural membership without supervision**: e.g. team inside an axis; carries `start_date` / `end_date` but no `position`
+
 ### Data provenance and internal entities
 
-Our institution created **ResearchUnit** and **Institution** nodes from its internal databases, and **Person** nodes (`external: false`) from its people registry. Internal persons are linked:
-- `(p:Person)-[:MEMBER_OF]->(ru:ResearchUnit)`
-- `(p:Person)-[:EMPLOYED_AT]->(inst:Institution)`
+**Person** nodes (`external: false`) were created from the institution's people registry. Internal persons are linked:
+- `(p:Person)-[:MEMBER_OF]->(ru:ResearchUnit)` — ResearchUnit is a subtype of OrganizationUnit
+- `(p:Person)-[:EMPLOYED_AT]->(inst:Institution)` — Institution is a subtype of OrganizationUnit
 - `(p:Person)-[:HAS_IDENTIFIER]->(id:AgentIdentifier)`
 
 **AgentIdentifier** nodes were used to harvest publications from external bibliographic databases (HAL, OpenAlex, ScanR, IdRef). The harvesting process created **SourceRecord** nodes linked to persons via `(sr:SourceRecord)-[:HARVESTED_FOR]->(p:Person)`.
@@ -112,7 +144,7 @@ Co-author affiliations with external research structures are found **at the Cont
 
 ### External organizations (AuthorityOrganization)
 
-**HAS_AFFILIATION_STATEMENT** points to **AuthorityOrganization** nodes (not to `Institution` or `ResearchUnit`). External organizations are reconstructed from registries such as RoR and represented in two subtypes:
+**HAS_AFFILIATION_STATEMENT** points to **AuthorityOrganization** nodes (not to `OrganizationUnit` subtypes). External organizations are reconstructed from registries such as RoR and represented in two subtypes:
 - **AuthorityOrganizationState**: an organization at a given point in time, with identifiers (RoR, IdRef, HAL)
 - **AuthorityOrganizationRoot**: groups multiple `AuthorityOrganizationState` nodes via `HAS_STATE` relations, for organizations that changed names, merged, or split
 
@@ -121,10 +153,6 @@ When an affiliation cannot be precisely matched to a specific `AuthorityOrganiza
 ### Person name properties
 
 `Person` nodes carry `display_name` (canonical string) and `display_name_variants` (list). A full-text index `person_fulltext_name` covers both with the `standard-no-stop-words` analyzer — use `CALL db.index.fulltext.queryNodes('person_fulltext_name', ...)` for fuzzy name search.
-
-### ResearchUnit name storage
-
-`ResearchUnit` nodes carry only `uid` and `acronym` directly. The human-readable name is a `Literal` node reached via `(ru:ResearchUnit)-[:HAS_NAME]->(name:Literal)`. This differs from `AuthorityOrganization`, which stores `display_name` as a property directly on the node.
 
 ### Journal nodes
 
@@ -136,3 +164,7 @@ Almost all strings in the graph are represented as **Literal** nodes with:
 - `value`: the string content
 - `language`: 2-letter ISO 639-1 code, or `"ul"` for undetermined language
 - `type`: the label type (e.g. `"concept_pref_label"`, `"concept_alt_label"`, `"document_title"`, `"document_abstract"`)
+
+## Neo4j / Cypher Reference
+
+Authoritative Cypher queries for the CRISalid graph are at `~/PycharmProjects/crisalid-ikg/app/graph/neo4j/queries`. Test fixture data (Cypher) is at `~/WebstormProjects/crisalid-apollo/tests/data/graph.cypher`.
