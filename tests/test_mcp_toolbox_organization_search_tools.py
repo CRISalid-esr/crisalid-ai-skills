@@ -1,7 +1,8 @@
 import json
 import pytest
 
-RESEARCH_UNIT_UID = "local-ru-123456"
+RESEARCH_UNIT_UID = "local-ru-123456"   # short label: LRA
+RESEARCH_UNIT_2_UID = "local-ru-999999"  # short label: LRAD (partial match for "lra")
 INSTITUTION_UID = "local-inst-234567"
 
 
@@ -111,4 +112,15 @@ async def test_type_ordering_research_unit_before_institution(org_search_tool):
     data = json.loads(result) if isinstance(result, str) else result
     types = [row["type"] for row in data]
     assert types[0] == "unit"
-    assert types[1] == "institution"
+    assert types[-1] == "institution"
+
+
+@pytest.mark.asyncio
+async def test_exact_short_label_ranks_before_partial(org_search_tool):
+    # "LRA" is an exact short label match for RESEARCH_UNIT_UID;
+    # "LRAD" is a partial match for RESEARCH_UNIT_2_UID — exact must come first
+    result = await org_search_tool.ainvoke({"name": "lra", "limit": 10})
+    data = json.loads(result) if isinstance(result, str) else result
+    uids = [row["uid"] for row in data]
+    assert uids[0] == RESEARCH_UNIT_UID
+    assert RESEARCH_UNIT_2_UID in uids

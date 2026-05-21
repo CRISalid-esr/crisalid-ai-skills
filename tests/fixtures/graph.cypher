@@ -301,3 +301,9 @@ MERGE (addr1)-[:HAS_CITY]->(addr1_city)
 MERGE (addr1)-[:HAS_ZIP_CODE]->(addr1_zip)
 MERGE (addr1)-[:HAS_COUNTRY]->(addr1_country)
 
+// --- Second ResearchUnit: short label "LRAD" (superset of "LRA") for exact-vs-partial ranking test ---
+WITH addr1
+CREATE (ru2:OrganizationUnit:Unit:ResearchUnit {uid: 'local-ru-999999', generic_type: 'unit', national_type: 'UMR', external: false})
+CREATE (ru2_sl:Literal {language: 'fr', value: 'LRAD', type: 'organization_short_label'})
+MERGE (ru2)-[:HAS_SHORT_LABEL]->(ru2_sl)
+

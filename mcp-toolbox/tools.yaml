@@ -505,7 +505,11 @@ statement: |
       THEN {uid: child.uid, long_label: child_label} END) AS children
   }
   WITH org, long_label, parents, children,
-    CASE WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 1 ELSE 2 END AS label_priority,
+    CASE
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) = toLower($name)) THEN 1
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 2
+      ELSE 3
+    END AS label_priority,
     CASE
       WHEN org:ResearchUnit OR org:Team THEN 1
       WHEN org:Unit THEN 2
