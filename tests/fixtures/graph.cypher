@@ -27,6 +27,7 @@ MERGE (inst)-[:HAS_IDENTIFIER]->(ini1)
 MERGE (inst)-[:HAS_LONG_LABEL]->(inst_ll)
 
 MERGE (p)-[:EMPLOYED_AT {position_code: 'PR'}]->(inst)
+MERGE (rs)-[:MEMBER_OF {position: 'main_supervision'}]->(inst)
 
 CREATE (c1:Concept {uid: 'http://www.idref.fr/02734004x/id', uri: 'http://www.idref.fr/02734004x/id'})
 CREATE (c1pl1:Literal {value: 'Analyse des données', language: 'fr', type: 'concept_pref_label'})
