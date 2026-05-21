@@ -34,6 +34,8 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 - **Client-side env vars**: `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_SSL_VERIFY` — used by sample scripts only
 - Clients use `client_credentials` grant; token getter passed via `auth_token_getters` to `aload_toolset()`
 
+> **Important**: `tools.yaml` and `tools-auth.yaml` must always be kept in sync. Any tool added to `tools.yaml` must also be added to `tools-auth.yaml` (with `authRequired: [crisalid-keycloak]` for curated tools), and both toolset lists must be updated identically.
+
 ## Docker
 
 - Image name on DockerHub: `crisalidesr/crisalid-neo4j-mcp-toolbox`

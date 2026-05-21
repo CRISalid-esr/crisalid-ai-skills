@@ -259,17 +259,86 @@ statement: |
   OPTIONAL MATCH (person)-[:HAS_IDENTIFIER]->(id:AgentIdentifier)
   WITH person, score,
        collect(DISTINCT CASE WHEN id IS NOT NULL THEN {type: id.type, value: id.value} END) AS identifiers
-  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:ResearchUnit)
-  OPTIONAL MATCH (ru)-[:HAS_NAME]->(ru_name:Literal)
-  WITH person, score, identifiers, ru, collect(DISTINCT ru_name.value) AS ru_names
+  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:OrganizationUnit)
+  OPTIONAL MATCH (ru)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+  OPTIONAL MATCH (ru)-[:HAS_SHORT_LABEL]->(sl:Literal {type: 'organization_short_label'})
+  WITH person, score, identifiers, ru,
+       collect(DISTINCT CASE WHEN ll IS NOT NULL THEN ll.value END) AS long_labels,
+       collect(DISTINCT CASE WHEN sl IS NOT NULL THEN sl.value END) AS short_labels
   RETURN
     person.uid AS uid,
     person.display_name AS display_name,
     person.external AS external,
     score,
     identifiers,
-    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, acronym: ru.acronym, names: ru_names} END) AS laboratories
+    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, long_labels: long_labels, short_labels: short_labels} END) AS laboratories
   ORDER BY score DESC
+
+---
+
+kind: tool
+name: list-person-collaborators
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  List the collaborators of a person — defined as people who co-authored at least
+  one Document with them. Results are ordered by number of shared publications
+  (descending) and capped at 15.
+  Each entry includes the collaborator's uid, display name, names (first/last),
+  whether they are internal or external, and the list of shared document titles.
+  Affiliations (from co-author contribution statements) are included only when
+  explicitly requested.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+  - name: start_date
+    type: string
+    description: "Filter collaborations from this date onward (ISO 8601, e.g. '2020-01-01'). Leave empty for no lower bound."
+    default: ""
+  - name: end_date
+    type: string
+    description: "Filter collaborations up to this date (ISO 8601). Defaults to today when start_date is provided but end_date is omitted. Leave empty for no upper bound."
+    default: ""
+  - name: include_affiliations
+    type: integer
+    description: Set to 1 to include each collaborator's institutional affiliations, 0 to omit
+    default: 0
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE ($start_date = '' OR doc.publication_date >= $start_date)
+    AND (CASE
+      WHEN $end_date = '' AND $start_date <> '' THEN doc.publication_date <= toString(date())
+      WHEN $end_date <> '' THEN doc.publication_date <= $end_date
+      ELSE true
+    END)
+  MATCH (doc)-[:HAS_CONTRIBUTION]->(collab_contrib:Contribution)<-[:HAS_CONTRIBUTION]-(collaborator:Person)
+  WHERE collaborator <> person
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH collaborator, collab_contrib, doc, collect(t.value)[0] AS doc_title
+  OPTIONAL MATCH (collab_contrib)-[:HAS_AFFILIATION_STATEMENT]->(org:AuthorityOrganization)
+  WITH collaborator,
+       collect(DISTINCT {uid: doc.uid, title: doc_title}) AS shared_docs,
+       collect(DISTINCT CASE WHEN org IS NOT NULL
+         THEN {uid: org.uid, display_names: org.display_names} END) AS affiliations
+  ORDER BY size(shared_docs) DESC
+  LIMIT 15
+  OPTIONAL MATCH (collaborator)-[:HAS_NAME]->(pn:PersonName)
+  OPTIONAL MATCH (pn)-[:HAS_FIRST_NAME]->(fn:Literal)
+  OPTIONAL MATCH (pn)-[:HAS_LAST_NAME]->(ln:Literal)
+  WITH collaborator, shared_docs, affiliations,
+       collect(DISTINCT CASE WHEN fn IS NOT NULL OR ln IS NOT NULL
+         THEN {first_name: fn.value, last_name: ln.value} END) AS names
+  RETURN
+    collaborator.uid AS uid,
+    collaborator.display_name AS display_name,
+    collaborator.external AS external,
+    names,
+    shared_docs,
+    CASE WHEN $include_affiliations = 1 THEN affiliations ELSE [] END AS affiliations
+  ORDER BY size(shared_docs) DESC
 
 ---
 
@@ -334,6 +403,81 @@ statement: |
 
 ---
 
+kind: tool
+name: get-person-memberships
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the OrganizationUnit(s) that a person is directly a member of,
+  as recorded in the institution's directory (MEMBER_OF relationships).
+  Each entry includes the unit UID and its human-readable labels (long name
+  and short name/acronym), which may be available in multiple languages.
+  Returns an empty list if the person has no direct memberships.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+statement: |
+  MATCH (person:Person {uid: $person_uid})-[:MEMBER_OF]->(org:OrganizationUnit)
+  OPTIONAL MATCH (org)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+  OPTIONAL MATCH (org)-[:HAS_SHORT_LABEL]->(sl:Literal {type: 'organization_short_label'})
+  WITH org,
+       collect(DISTINCT CASE WHEN ll IS NOT NULL THEN {value: ll.value, language: ll.language} END) AS long_labels,
+       collect(DISTINCT CASE WHEN sl IS NOT NULL THEN {value: sl.value, language: sl.language} END) AS short_labels
+  RETURN
+    org.uid AS institution_uid,
+    long_labels,
+    short_labels
+
+---
+
+kind: tool
+name: search-researchers-by-concept
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Search for internal researchers who have authored publications related to a
+  given concept or keyword. The concept string is matched as a case-insensitive
+  substring against all concept labels (preferred and alternative, any language)
+  and against free-text keyword labels.
+  Returns one entry per researcher, sorted by number of matching publications
+  (highest first). Only researchers with external: false are included.
+parameters:
+  - name: concept
+    type: string
+    description: Free-text concept to search for — matched as a case-insensitive substring against concept/keyword labels
+  - name: limit
+    type: integer
+    description: Maximum number of researchers to return
+    default: 15
+statement: |
+  MATCH (person:Person {external: false})-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  MATCH (doc)-[:HAS_SUBJECT]->(concept:Concept)
+  WHERE (
+    any(v IN [(concept)-[:HAS_PREF_LABEL]->(l) | l.value] WHERE toLower(v) CONTAINS toLower($concept))
+    OR any(v IN [(concept)-[:HAS_ALT_LABEL]->(l) | l.value] WHERE toLower(v) CONTAINS toLower($concept))
+    OR (concept.prefLabel IS NOT NULL AND toLower(concept.prefLabel) CONTAINS toLower($concept))
+  )
+  WITH DISTINCT person, doc
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH person, doc, collect(t.value)[0] AS title
+  WITH person,
+       collect(DISTINCT title) AS publication_titles,
+       count(DISTINCT doc) AS publication_count
+  RETURN
+    person.uid AS researcher_uid,
+    person.display_name AS researcher_name,
+    publication_titles,
+    publication_count
+  ORDER BY publication_count DESC
+  LIMIT $limit
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -344,7 +488,10 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - list-person-collaborators
   - get-institution-locations
+  - get-person-memberships
+  - search-researchers-by-concept
 
 ---
 
@@ -358,5 +505,8 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - list-person-collaborators
   - get-institution-locations
+  - get-person-memberships
+  - search-researchers-by-concept
   - execute-cypher-readonly
