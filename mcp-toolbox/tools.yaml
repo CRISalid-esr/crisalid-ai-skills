@@ -473,6 +473,10 @@ parameters:
     type: integer
     description: Set to 1 to include direct child OrganizationUnits for each match
     default: 0
+  - name: limit
+    type: integer
+    description: Maximum number of results to return — short label matches and research units rank first
+    default: 1
 statement: |
   MATCH (org:OrganizationUnit)
   WHERE (
@@ -500,12 +504,22 @@ statement: |
     RETURN collect(DISTINCT CASE WHEN child IS NOT NULL
       THEN {uid: child.uid, long_label: child_label} END) AS children
   }
+  WITH org, long_label, parents, children,
+    CASE WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 1 ELSE 2 END AS label_priority,
+    CASE
+      WHEN org:ResearchUnit OR org:Team THEN 1
+      WHEN org:Unit THEN 2
+      WHEN org:Institution THEN 3
+      ELSE 4
+    END AS type_priority
   RETURN
     org.uid AS uid,
     long_label,
     org.generic_type AS type,
     CASE WHEN $include_parent = 1 THEN parents[0] ELSE null END AS parent,
     CASE WHEN $include_children = 1 THEN children ELSE [] END AS children
+  ORDER BY label_priority ASC, type_priority ASC
+  LIMIT $limit
 
 ---
 

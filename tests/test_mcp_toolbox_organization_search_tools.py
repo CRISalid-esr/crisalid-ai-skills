@@ -86,3 +86,29 @@ async def test_unknown_name_returns_empty(org_search_tool):
     result = await org_search_tool.ainvoke({"name": "xyznonexistentorg42"})
     data = json.loads(result) if isinstance(result, str) else result
     assert not data
+
+
+@pytest.mark.asyncio
+async def test_default_limit_returns_one(org_search_tool):
+    # "de" appears in both the ResearchUnit and the Institution long labels
+    result = await org_search_tool.ainvoke({"name": "de"})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert len(data) == 1
+
+
+@pytest.mark.asyncio
+async def test_custom_limit(org_search_tool):
+    result = await org_search_tool.ainvoke({"name": "de", "limit": 10})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert len(data) == 2
+
+
+@pytest.mark.asyncio
+async def test_type_ordering_research_unit_before_institution(org_search_tool):
+    # Both ResearchUnit and Institution have "de" in their long label;
+    # ResearchUnit (type "unit") must rank before Institution (type "institution")
+    result = await org_search_tool.ainvoke({"name": "de", "limit": 10})
+    data = json.loads(result) if isinstance(result, str) else result
+    types = [row["type"] for row in data]
+    assert types[0] == "unit"
+    assert types[1] == "institution"
