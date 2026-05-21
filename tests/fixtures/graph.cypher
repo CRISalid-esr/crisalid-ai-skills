@@ -27,6 +27,7 @@ MERGE (inst)-[:HAS_IDENTIFIER]->(ini1)
 MERGE (inst)-[:HAS_LONG_LABEL]->(inst_ll)
 
 MERGE (p)-[:EMPLOYED_AT {position_code: 'PR'}]->(inst)
+MERGE (rs)-[:MEMBER_OF {position: 'main_supervision'}]->(inst)
 
 CREATE (c1:Concept {uid: 'http://www.idref.fr/02734004x/id', uri: 'http://www.idref.fr/02734004x/id'})
 CREATE (c1pl1:Literal {value: 'Analyse des données', language: 'fr', type: 'concept_pref_label'})
@@ -299,4 +300,16 @@ MERGE (ao_s1)-[:HAS_ADDRESS]->(addr1)
 MERGE (addr1)-[:HAS_CITY]->(addr1_city)
 MERGE (addr1)-[:HAS_ZIP_CODE]->(addr1_zip)
 MERGE (addr1)-[:HAS_COUNTRY]->(addr1_country)
+
+// --- Additional ResearchUnits for short label ranking tests ---
+// ru2: short label "LRAD"  — pure substring of "LRA" (tests exact > substring)
+// ru3: short label "LRA Bordeaux" — "LRA" as a whole word (tests word-boundary > substring)
+WITH addr1
+CREATE (ru2:OrganizationUnit:Unit:ResearchUnit {uid: 'local-ru-999999', generic_type: 'unit', national_type: 'UMR', external: false})
+CREATE (ru2_sl:Literal {language: 'fr', value: 'LRAD', type: 'organization_short_label'})
+MERGE (ru2)-[:HAS_SHORT_LABEL]->(ru2_sl)
+WITH ru2
+CREATE (ru3:OrganizationUnit:Unit:ResearchUnit {uid: 'local-ru-888888', generic_type: 'unit', national_type: 'UMR', external: false})
+CREATE (ru3_sl:Literal {language: 'fr', value: 'LRA Paris', type: 'organization_short_label'})
+MERGE (ru3)-[:HAS_SHORT_LABEL]->(ru3_sl)
 

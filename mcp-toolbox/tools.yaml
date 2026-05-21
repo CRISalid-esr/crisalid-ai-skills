@@ -452,6 +452,82 @@ statement: |
 
 ---
 
+kind: tool
+name: search-organization-unit-by-name
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Search for OrganizationUnit nodes by a partial name string, matched
+  case-insensitively against both long labels and short labels.
+  Returns uid, long label, and generic type for each match.
+  Optionally includes the direct parent unit and/or direct child units.
+parameters:
+  - name: name
+    type: string
+    description: Partial name to search for — case-insensitive substring match against long and short labels
+  - name: include_parent
+    type: integer
+    description: Set to 1 to include the direct parent OrganizationUnit for each match
+    default: 0
+  - name: include_children
+    type: integer
+    description: Set to 1 to include direct child OrganizationUnits for each match
+    default: 0
+  - name: limit
+    type: integer
+    description: Maximum number of results to return — short label matches and research units rank first
+    default: 1
+statement: |
+  MATCH (org:OrganizationUnit)
+  WHERE (
+    any(v IN [(org)-[:HAS_LONG_LABEL]->(l) | l.value] WHERE toLower(v) CONTAINS toLower($name))
+    OR any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name))
+  )
+  CALL {
+    WITH org
+    OPTIONAL MATCH (org)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+    RETURN collect(ll.value)[0] AS long_label
+  }
+  CALL {
+    WITH org
+    OPTIONAL MATCH (org)-[:PART_OF|MEMBER_OF]->(parent:OrganizationUnit)
+    OPTIONAL MATCH (parent)-[:HAS_LONG_LABEL]->(pll:Literal {type: 'organization_long_label'})
+    WITH parent, collect(pll.value)[0] AS parent_label
+    RETURN collect(DISTINCT CASE WHEN parent IS NOT NULL
+      THEN {uid: parent.uid, long_label: parent_label} END) AS parents
+  }
+  CALL {
+    WITH org
+    OPTIONAL MATCH (child:OrganizationUnit)-[:PART_OF|MEMBER_OF]->(org)
+    OPTIONAL MATCH (child)-[:HAS_LONG_LABEL]->(cll:Literal {type: 'organization_long_label'})
+    WITH child, collect(cll.value)[0] AS child_label
+    RETURN collect(DISTINCT CASE WHEN child IS NOT NULL
+      THEN {uid: child.uid, long_label: child_label} END) AS children
+  }
+  WITH org, long_label, parents, children,
+    CASE
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) = toLower($name)) THEN 1
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(' ' + v + ' ') CONTAINS toLower(' ' + $name + ' ')) THEN 2
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 3
+      ELSE 4
+    END AS label_priority,
+    CASE
+      WHEN org:ResearchUnit OR org:Team THEN 1
+      WHEN org:Unit THEN 2
+      WHEN org:Institution THEN 3
+      ELSE 4
+    END AS type_priority
+  RETURN
+    org.uid AS uid,
+    long_label,
+    org.generic_type AS type,
+    CASE WHEN $include_parent = 1 THEN parents[0] ELSE null END AS parent,
+    CASE WHEN $include_children = 1 THEN children ELSE [] END AS children
+  ORDER BY label_priority ASC, type_priority ASC
+  LIMIT $limit
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -466,6 +542,7 @@ tools:
   - get-institution-locations
   - get-person-memberships
   - search-researchers-by-concept
+  - search-organization-unit-by-name
 
 ---
 
@@ -483,4 +560,5 @@ tools:
   - get-institution-locations
   - get-person-memberships
   - search-researchers-by-concept
+  - search-organization-unit-by-name
   - execute-cypher-readonly
