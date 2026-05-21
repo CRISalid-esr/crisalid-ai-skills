@@ -507,8 +507,9 @@ statement: |
   WITH org, long_label, parents, children,
     CASE
       WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) = toLower($name)) THEN 1
-      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 2
-      ELSE 3
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(' ' + v + ' ') CONTAINS toLower(' ' + $name + ' ')) THEN 2
+      WHEN any(v IN [(org)-[:HAS_SHORT_LABEL]->(s) | s.value] WHERE toLower(v) CONTAINS toLower($name)) THEN 3
+      ELSE 4
     END AS label_priority,
     CASE
       WHEN org:ResearchUnit OR org:Team THEN 1

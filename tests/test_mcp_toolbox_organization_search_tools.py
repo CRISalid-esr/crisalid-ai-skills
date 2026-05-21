@@ -1,8 +1,9 @@
 import json
 import pytest
 
-RESEARCH_UNIT_UID = "local-ru-123456"   # short label: LRA
-RESEARCH_UNIT_2_UID = "local-ru-999999"  # short label: LRAD (partial match for "lra")
+RESEARCH_UNIT_UID = "local-ru-123456"   # short label: LRA         (exact match for "lra")
+RESEARCH_UNIT_2_UID = "local-ru-999999"  # short label: LRAD        (substring match for "lra")
+RESEARCH_UNIT_3_UID = "local-ru-888888"  # short label: LRA Paris   (word-boundary match for "lra")
 INSTITUTION_UID = "local-inst-234567"
 
 
@@ -117,10 +118,19 @@ async def test_type_ordering_research_unit_before_institution(org_search_tool):
 
 @pytest.mark.asyncio
 async def test_exact_short_label_ranks_before_partial(org_search_tool):
-    # "LRA" is an exact short label match for RESEARCH_UNIT_UID;
-    # "LRAD" is a partial match for RESEARCH_UNIT_2_UID — exact must come first
+    # Exact "LRA" must rank before word-boundary "LRA Bordeaux" and substring "LRAD"
     result = await org_search_tool.ainvoke({"name": "lra", "limit": 10})
     data = json.loads(result) if isinstance(result, str) else result
     uids = [row["uid"] for row in data]
     assert uids[0] == RESEARCH_UNIT_UID
     assert RESEARCH_UNIT_2_UID in uids
+    assert RESEARCH_UNIT_3_UID in uids
+
+
+@pytest.mark.asyncio
+async def test_word_boundary_short_label_ranks_before_substring(org_search_tool):
+    # "LRA Bordeaux" (word boundary) must rank before "LRAD" (pure substring)
+    result = await org_search_tool.ainvoke({"name": "lra", "limit": 10})
+    data = json.loads(result) if isinstance(result, str) else result
+    uids = [row["uid"] for row in data]
+    assert uids.index(RESEARCH_UNIT_3_UID) < uids.index(RESEARCH_UNIT_2_UID)
