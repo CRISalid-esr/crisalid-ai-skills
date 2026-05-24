@@ -3,9 +3,15 @@ import socket  # noqa: F401 used in toolbox_url fixture
 
 import pytest
 import pytest_asyncio
+import toolbox_core.protocol as _tc_protocol
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from toolbox_langchain import ToolboxClient
+
+# toolbox server serialises float parameters as JSON Schema "number";
+# the client type map only has "float" — add the alias so float array
+# parameters (e.g. embedding vectors) load without ValueError.
+_tc_protocol.__TYPE_MAP["number"] = float  # type: ignore[attr-defined]
 
 load_dotenv("mcp-toolbox/.env.test", override=True)
 
@@ -37,6 +43,20 @@ def load_fixtures():
             "CREATE VECTOR INDEX embeddable_embedding IF NOT EXISTS "
             "FOR (n:Embeddable) ON n.embedding "
             "OPTIONS {indexConfig: {`vector.dimensions`: 1024, `vector.similarity_function`: 'cosine'}}"
+        )
+        title_vec = [1.0 if i == 0 else 0.0 for i in range(1024)]
+        abstract_vec = [1.0 if i == 1 else 0.0 for i in range(1024)]
+        session.run(
+            "MATCH (doc:Document {uid: 'doc1'})-[:HAS_TITLE]->(t:Literal {language: 'en'}) "
+            "SET t:Embeddable, t.type = 'document_title', t.embedding_status = 'success', "
+            "    t.embedding_model = 'bge-m3', t.embedding = $vec",
+            vec=title_vec,
+        )
+        session.run(
+            "MATCH (doc:Document {uid: 'doc1'})-[:HAS_ABSTRACT]->(a:TextLiteral {language: 'en'}) "
+            "SET a:Embeddable, a.type = 'document_abstract', a.embedding_status = 'success', "
+            "    a.embedding_model = 'bge-m3', a.embedding = $vec",
+            vec=abstract_vec,
         )
         session.run("CALL db.awaitIndexes(30)")
     driver.close()
