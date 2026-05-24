@@ -33,6 +33,12 @@ def load_fixtures():
             "FOR (p:Person) ON EACH [p.display_name, p.display_name_variants] "
             "OPTIONS { indexConfig: { `fulltext.analyzer`: 'standard-no-stop-words' } }"
         )
+        session.run(
+            "CREATE VECTOR INDEX embeddable_embedding IF NOT EXISTS "
+            "FOR (n:Embeddable) ON n.embedding "
+            "OPTIONS {indexConfig: {`vector.dimensions`: 1024, `vector.similarity_function`: 'cosine'}}"
+        )
+        session.run("CALL db.awaitIndexes(30)")
     driver.close()
 
 
