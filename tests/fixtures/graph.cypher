@@ -314,11 +314,11 @@ CREATE (ru3_sl:Literal {language: 'fr', value: 'LRA Paris', type: 'organization_
 MERGE (ru3)-[:HAS_SHORT_LABEL]->(ru3_sl);
 
 // --- Embeddings for semantic search tests ---
-// title1 gets a unit vector along dim 0; abstract1 gets a unit vector along dim 1.
-// These orthogonal vectors let tests distinguish title-hit vs abstract-hit queries.
+// title1: unit vector along dim 0. abstract1: unit vector along dim 1.
+// Orthogonal vectors let tests distinguish title-hit vs abstract-hit queries.
 WITH [i IN range(0, 1023) | CASE WHEN i = 0 THEN 1.0 ELSE 0.0 END] AS title_vec,
      [i IN range(0, 1023) | CASE WHEN i = 1 THEN 1.0 ELSE 0.0 END] AS abstract_vec
-MATCH (t:Literal {language: 'en', value: 'All We Are Is Dust in the WIM: Constraints on Dust Properties in the Milky Way’s Warm Ionized Medium'})
+MATCH (t:Literal {language: ‘en’, value: "All We Are Is Dust in the WIM: Constraints on Dust Properties in the Milky Way’s Warm Ionized Medium"})
 SET t:Embeddable,
     t.type = 'document_title',
     t.embedding_status = 'success',
