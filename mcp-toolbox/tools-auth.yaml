@@ -580,6 +580,76 @@ statement: |
 
 ---
 
+kind: tool
+name: publications-by-theme
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return publications whose titles (and optionally abstracts) best match a given
+  theme, using semantic similarity search. Results are deduplicated by document
+  and ordered from closest to farthest match.
+parameters:
+  - name: semantic_theme
+    type: string
+    description: The theme to search for, as a natural language string (e.g. "machine learning applied to climate modelling")
+  - name: semantic_theme_vector
+    type: array
+    description: Embedding vector for theme (1024 floats, bge-m3 model)
+    items:
+      name: component
+      type: float
+      description: Vector component
+    default: []
+  - name: limit
+    type: integer
+    description: Maximum number of documents to return (max 100)
+    default: 10
+  - name: use_abstract
+    type: boolean
+    description: If true, search abstracts in addition to titles and include them in results
+    default: false
+statement: |
+  CALL db.index.vector.queryNodes('embeddable_embedding', toInteger($limit) * 100, $semantic_theme_vector)
+  YIELD node AS literal, score
+  WHERE literal.embedding_status = 'success'
+    AND literal.type IN (CASE WHEN $use_abstract
+      THEN ['document_title', 'document_abstract']
+      ELSE ['document_title'] END)
+  MATCH (doc:Document)-[:HAS_TITLE|HAS_ABSTRACT]->(literal)
+  WITH doc, max(score) AS best_score
+  ORDER BY best_score DESC
+  LIMIT $limit
+  CALL {
+    WITH doc
+    MATCH (doc)-[:HAS_TITLE]->(t:Literal {type: 'document_title'})
+    RETURN collect(t.value) AS titles
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:HAS_ABSTRACT]->(a)
+    RETURN collect(a.value) AS all_abstracts
+  }
+  CALL {
+    WITH doc
+    OPTIONAL MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(contributor:Person)
+    RETURN collect(DISTINCT CASE WHEN contributor IS NOT NULL THEN {
+      uid: contributor.uid,
+      name: contributor.display_name,
+      external: contributor.external,
+      roles: contrib.roles
+    } END) AS contributors
+  }
+  RETURN doc.uid AS uid,
+         best_score AS score,
+         titles,
+         CASE WHEN $use_abstract THEN all_abstracts ELSE null END AS abstracts,
+         contributors
+  ORDER BY score DESC
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -596,6 +666,7 @@ tools:
   - search-researchers-by-concept
   - search-organization-unit-by-name
   - get-organization-unit-members
+  - publications-by-theme
 
 ---
 
@@ -615,4 +686,5 @@ tools:
   - search-researchers-by-concept
   - search-organization-unit-by-name
   - get-organization-unit-members
+  - publications-by-theme
   - execute-cypher-readonly

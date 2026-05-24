@@ -167,6 +167,85 @@ Almost all strings in the graph are represented as **Literal** nodes with:
 - `language`: 2-letter ISO 639-1 code, or `"ul"` for undetermined language
 - `type`: the label type (e.g. `"concept_pref_label"`, `"concept_alt_label"`, `"document_title"`, `"document_abstract"`)
 
+## Embeddings and vector search
+
+### Vector index
+
+A single Neo4j vector index named **`embeddable_embedding`** is maintained on the `Embeddable` label:
+
+```cypher
+CREATE VECTOR INDEX embeddable_embedding IF NOT EXISTS
+FOR (n:Embeddable) ON n.embedding
+OPTIONS {indexConfig: {`vector.dimensions`: <configured>, `vector.similarity_function`: 'cosine'}}
+```
+
+It covers both `Literal:Embeddable` and `TextLiteral:Embeddable` nodes uniformly.
+
+### Querying the index
+
+Always filter `embedding_status = 'success'` — nodes may carry the `:Embeddable` label before a vector has been computed:
+
+```cypher
+CALL db.index.vector.queryNodes('embeddable_embedding', $k, $query_embedding)
+YIELD node, score
+WHERE node.embedding_status = 'success'
+```
+
+`$query_embedding` is a `list<float>` that must have been produced by the same model used to build the index. `$k` is the number of candidate nodes to retrieve before post-filtering.
+
+### Embeddable types and their graph anchors
+
+Use this table to know which relationship and direction connects an `:Embeddable` node back to the entity that owns it:
+
+| `type` property | Node label | Incoming relationship | Owner node |
+|---|---|---|---|
+| `document_title` | `Literal` | `(doc:Document)-[:HAS_TITLE]->(l)` | `Document` |
+| `document_abstract` | `TextLiteral` | `(doc:Document)-[:HAS_ABSTRACT]->(l)` | `Document` |
+| `concept_pref_label` | `Literal` | `(c:Concept)-[:HAS_PREF_LABEL]->(l)` | `Concept` |
+| `concept_alt_label` | `Literal` | `(c:Concept)-[:HAS_ALT_LABEL]->(l)` | `Concept` |
+| `concept_definition` | `TextLiteral` | `(c:Concept)-[:HAS_DEFINITION]->(l)` | `Concept` |
+| `research_unit_name` | `Literal` | `(u:OrganizationUnit)-[:HAS_LONG_LABEL]->(l)` | `OrganizationUnit` |
+| `research_unit_description` | `TextLiteral` | `(u:OrganizationUnit)-[:HAS_DESCRIPTION]->(l)` | `OrganizationUnit` |
+| `organization_long_label` | `Literal` | `(o:OrganizationUnit)-[:HAS_LONG_LABEL]->(l)` | `OrganizationUnit` |
+| `organization_description` | `TextLiteral` | `(o:OrganizationUnit)-[:HAS_DESCRIPTION]->(l)` | `OrganizationUnit` |
+| `institution_name` | `Literal` | `(i:Institution)-[:HAS_LONG_LABEL]->(l)` | `Institution` |
+| `institution_country_name` | `Literal` | via `HAS_ADDRESS` / `HAS_COUNTRY` chain | `StructuredPhysicalAddress` |
+| `institution_state_name` | `Literal` | via `HAS_ADDRESS` / `HAS_STATE` chain | `StructuredPhysicalAddress` |
+| `institution_continent_name` | `Literal` | via `HAS_ADDRESS` / `HAS_CONTINENT` chain | `StructuredPhysicalAddress` |
+| `authority_organization_state_name` | `Literal` | `(a:AuthorityOrganizationState)-[:HAS_NAME]->(l)` | `AuthorityOrganizationState` |
+
+### Typical Cypher pattern
+
+Vector search → retrieve candidate literals → traverse back to owner entities → return results ranked by score:
+
+```cypher
+CALL db.index.vector.queryNodes('embeddable_embedding', $k, $query_embedding)
+YIELD node AS literal, score
+WHERE literal.embedding_status = 'success'
+  AND literal.type IN ['document_title', 'document_abstract']
+MATCH (doc:Document)-[:HAS_TITLE|HAS_ABSTRACT]->(literal)
+RETURN doc.uid AS uid, literal.value AS matched_text, score
+ORDER BY score DESC
+LIMIT $limit
+```
+
+Post-filter with `WHERE literal.type IN [...]` to restrict results to a specific semantic domain; do not rely on `$k` alone because the index covers all types.
+
+### Embedding properties on Embeddable nodes
+
+| Property | Type | Meaning |
+|---|---|---|
+| `embedding_status` | string | `'pending'` / `'success'` / `'failed'` — always filter `= 'success'` before vector queries |
+| `embedding` | `list<float>` | The vector, present only when status is `'success'` |
+| `embedding_model` | string | Model name used to produce this vector |
+| `embedding_hash` | string | SHA-256 of `value` at embedding time — used to detect stale vectors |
+
+### Important caveats
+
+- The embedding dimension depends on the deployed model (e.g. 384 for `multilingual-e5-small`, 1024 for `bge-m3`). Tools must not hardcode a dimension.
+- Embeddings may be absent on a freshly populated graph until `compute-embeddings` is run. Always guard with `embedding_status = 'success'`.
+- The index is on `Embeddable.embedding`, not on `Literal.embedding` or `TextLiteral.embedding` — always use the `:Embeddable` label in vector calls.
+
 ## Neo4j / Cypher Reference
 
 Authoritative Cypher queries for the CRISalid graph are at `~/PycharmProjects/crisalid-ikg/app/graph/neo4j/queries`. Test fixture data (Cypher) is at `~/WebstormProjects/crisalid-apollo/tests/data/graph.cypher`.
