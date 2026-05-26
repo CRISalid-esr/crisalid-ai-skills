@@ -40,7 +40,7 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test
         run: |
-          npx --yes @toolbox-sdk/server --configs tools.yaml tools-sorbobot.yaml &
+          npx --yes @toolbox-sdk/server --config tools.yaml &
           timeout 30 bash -c 'until nc -z localhost 5000; do sleep 1; done'
 
       - name: Run tests
