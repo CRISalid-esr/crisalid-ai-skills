@@ -1,0 +1,223 @@
+# SorboBot tools — MCP-compatible Cypher tools for the Sorbonne research graph
+# Format mirrors tools.yaml so these entries can be merged into any neo4j-mcp server.
+# Source: same Neo4j instance as crisalid-neo4j.
+#
+# Architecture note (MCP vs Python agent):
+#   - These YAML tools are the canonical query definitions for external MCP servers.
+#   - The Python agent (src/agent.py) wraps the same logic but also uses
+#     neo4j_client.adaptive_tree_search() for sorbobot-get-domain-authors,
+#     which automatically broadens/narrows the domain scope to reach the
+#     target author count.  MCP clients receive the direct Cypher equivalent.
+
+---
+
+kind: source
+name: crisalid-neo4j
+type: neo4j
+uri: ${NEO4J_URI}
+user: ${NEO4J_USER}
+password: ${NEO4J_PASSWORD}
+database: neo4j
+
+---
+
+kind: tool
+name: sorbobot-search-domains
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Search for research Domain nodes whose name matches a keyword.
+  Only counts Document→Domain links whose HAS_DOMAIN similarity meets the threshold,
+  so domains with few qualifying publications rank lower.
+  Returns name, full_path, depth, and nb_docs (qualifying document count).
+  Call this FIRST when looking for experts in a research field, then pass the
+  returned full_path values to sorbobot-get-domain-authors.
+parameters:
+  - name: keyword
+    type: string
+    description: Research domain keyword in English (e.g. "natural language processing")
+  - name: similarity_threshold
+    type: number
+    description: |
+      Minimum r.similarity on HAS_DOMAIN edges used for counting qualifying documents (0–1).
+      Applied only to the document count — NOT to author retrieval.
+      Default 0.63.
+    default: 0.63
+  - name: min_depth
+    type: integer
+    description: Minimum domain hierarchy depth (2 = sub-field, 1 = top-level). Default 2.
+    default: 2
+  - name: limit
+    type: integer
+    description: Maximum number of domains to return. Default 20.
+    default: 20
+statement: |
+  MATCH (domain:Domain)
+  WHERE toLower(domain.name) CONTAINS toLower($keyword)
+    AND domain.depth >= $min_depth
+    AND domain.depth <= 5
+  OPTIONAL MATCH (doc:Document)-[r:HAS_DOMAIN]->(domain)
+  WHERE r.similarity >= $similarity_threshold
+  WITH domain, count(doc) AS nb_docs
+  ORDER BY
+    CASE WHEN nb_docs > 0 THEN 0 ELSE 1 END,
+    domain.depth ASC,
+    nb_docs DESC
+  LIMIT $limit
+  RETURN
+    domain.name      AS name,
+    domain.full_path AS full_path,
+    domain.depth     AS depth,
+    nb_docs
+
+---
+
+kind: tool
+name: sorbobot-get-domain-authors
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Find internal Sorbonne researchers (Person.external = false) whose publications
+  are associated with the given domain full_paths.
+  IMPORTANT: No HAS_DOMAIN similarity filter is applied here — the similarity
+  threshold is only used at the domain-finding stage (sorbobot-search-domains).
+  Applying it at this stage would incorrectly exclude many publications.
+  Returns authors ranked by number of qualifying publications, with a sample of
+  article titles and the domain paths they belong to.
+  Use after sorbobot-search-domains (and optionally sorbobot-judge-domains).
+  For adaptive scope adjustment, use sorbobot-get-parent-domains when too few
+  authors are returned, or query child domains when too many.
+parameters:
+  - name: domain_paths
+    type: string
+    description: Comma-separated list of Domain.full_path values
+  - name: limit
+    type: integer
+    description: Maximum number of authors to return. Default 20.
+    default: 20
+statement: |
+  WITH split($domain_paths, ',') AS paths
+  MATCH (domain:Domain)
+  WHERE domain.full_path IN [p IN paths | trim(p)]
+  MATCH (doc:Document)-[:HAS_DOMAIN]->(domain)
+  MATCH (doc)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(p:Person)
+  WHERE p.external = false AND p.display_name IS NOT NULL
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
+  WITH p, domain, doc, collect(t.value)[0] AS doc_title
+  WITH p,
+       count(DISTINCT doc)                AS nb_publications,
+       collect(DISTINCT domain.name)[..3] AS sample_domains,
+       collect(DISTINCT {
+         uid:   doc.uid,
+         title: coalesce(doc_title, doc.uid),
+         path:  domain.full_path
+       })[..10]                           AS sample_articles
+  ORDER BY nb_publications DESC
+  LIMIT $limit
+  RETURN
+    p.uid            AS uid,
+    p.display_name   AS display_name,
+    nb_publications,
+    sample_domains,
+    sample_articles
+
+---
+
+kind: tool
+name: sorbobot-get-parent-domains
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return the parent domains (one level up in the OpenAlex hierarchy) for the
+  given domain full_paths. Use for ADAPTIVE SEARCH: when sorbobot-get-domain-authors
+  returns too few researchers (< 10), call this tool to get broader parent domains,
+  then retry sorbobot-get-domain-authors with the parent full_paths.
+parameters:
+  - name: domain_paths
+    type: string
+    description: Comma-separated list of Domain.full_path values
+statement: |
+  WITH split($domain_paths, ',') AS paths
+  MATCH (child:Domain)
+  WHERE child.full_path IN [p IN paths | trim(p)]
+  MATCH (child)-[:HAS_PARENT]->(parent:Domain)
+  RETURN DISTINCT
+    parent.name      AS name,
+    parent.full_path AS full_path,
+    parent.depth     AS depth
+  ORDER BY parent.depth DESC
+
+---
+
+kind: tool
+name: sorbobot-get-person-expertise
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return the top research domains for a named internal Sorbonne researcher.
+  Domains are ranked by number of associated publications.
+  Handles partial names (substring match on display_name).
+  For misspelled names, try the closest substring of the name you know.
+  Use when the user asks what a specific person researches or works on.
+parameters:
+  - name: name
+    type: string
+    description: Full or partial display name of the researcher
+  - name: limit
+    type: integer
+    description: Number of top domains to return. Default 10.
+    default: 10
+statement: |
+  MATCH (p:Person)
+  WHERE toLower(p.display_name) CONTAINS toLower($name)
+    AND p.external = false
+  WITH p ORDER BY p.display_name ASC LIMIT 5
+  MATCH (p)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  MATCH (doc)-[:HAS_DOMAIN]->(domain:Domain)
+  WHERE domain.depth >= 2
+  WITH p, domain, count(DISTINCT doc) AS nb_publications
+  ORDER BY nb_publications DESC
+  LIMIT $limit
+  RETURN
+    p.uid            AS uid,
+    p.display_name   AS display_name,
+    domain.name      AS domain_name,
+    domain.full_path AS domain_path,
+    nb_publications
+
+---
+
+kind: tool
+name: sorbobot-execute-cypher-readonly
+type: neo4j-execute-cypher
+source: crisalid-neo4j
+description: |
+  Execute arbitrary read-only Cypher queries for SorboBot analysis.
+readOnly: true
+
+---
+
+# ── Toolsets ──────────────────────────────────────────────────────────────────
+
+# Curated tools only — no raw Cypher access.
+# Load with: client.load_toolset("sorbobot-restricted")
+kind: toolset
+name: sorbobot-restricted
+tools:
+  - sorbobot-search-domains
+  - sorbobot-get-domain-authors
+  - sorbobot-get-parent-domains
+  - sorbobot-get-person-expertise
+
+---
+
+# All SorboBot tools + raw read-only Cypher for advanced queries.
+# Load with: client.load_toolset("sorbobot-full")
+kind: toolset
+name: sorbobot-full
+tools:
+  - sorbobot-search-domains
+  - sorbobot-get-domain-authors
+  - sorbobot-get-parent-domains
+  - sorbobot-get-person-expertise
+  - sorbobot-execute-cypher-readonly
