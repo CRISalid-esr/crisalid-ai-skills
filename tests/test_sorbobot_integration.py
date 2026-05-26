@@ -1,48 +1,51 @@
 """
-Integration tests for SorboBot tools.
+Integration tests for SorboBot tools via MCP server.
 """
+import json
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_sorbobot_tools_can_be_loaded(sorbobot_tools_dict):
-    """Test that all SorboBot tools can be loaded from YAML."""
-    expected_tools = {
+async def test_sorbobot_toolset_restricted_loads(toolbox_client):
+    """Test that sorbobot-restricted toolset can be loaded."""
+    tools = await toolbox_client.aload_toolset("sorbobot-restricted")
+    assert len(tools) == 4, "sorbobot-restricted should have 4 tools"
+    tool_names = {t.name for t in tools}
+    expected = {
+        "sorbobot-search-domains",
+        "sorbobot-get-domain-authors",
+        "sorbobot-get-parent-domains",
+        "sorbobot-get-person-expertise"
+    }
+    assert expected == tool_names, f"Expected {expected}, got {tool_names}"
+
+
+@pytest.mark.asyncio
+async def test_sorbobot_toolset_full_loads(toolbox_client):
+    """Test that sorbobot-full toolset can be loaded."""
+    tools = await toolbox_client.aload_toolset("sorbobot-full")
+    assert len(tools) == 5, "sorbobot-full should have 5 tools"
+    tool_names = {t.name for t in tools}
+    expected = {
         "sorbobot-search-domains",
         "sorbobot-get-domain-authors",
         "sorbobot-get-parent-domains",
         "sorbobot-get-person-expertise",
         "sorbobot-execute-cypher-readonly"
     }
-    
-    tool_names = set(sorbobot_tools_dict.keys())
-    assert expected_tools.issubset(tool_names), \
-        f"Expected tools {expected_tools}, got {tool_names}"
+    assert expected == tool_names, f"Expected {expected}, got {tool_names}"
 
 
 @pytest.mark.asyncio
-async def test_sorbobot_tools_have_cypher_statements(sorbobot_tools_dict):
-    """Test that SorboBot cypher tools have valid Cypher statements."""
-    # Filter to cypher tools only (not including execute-cypher-readonly which is a different type)
-    cypher_tools = {
-        name: tool_def for name, tool_def in sorbobot_tools_dict.items()
-        if tool_def.get("type") == "neo4j-cypher"
-    }
+async def test_sorbobot_search_domains_tool_callable(toolbox_client):
+    """Test that sorbobot-search-domains tool is callable."""
+    tools = await toolbox_client.aload_toolset("sorbobot-restricted")
+    tool = next(t for t in tools if t.name == "sorbobot-search-domains")
     
-    for tool_name, tool_def in cypher_tools.items():
-        assert "statement" in tool_def, \
-            f"Tool {tool_name} missing 'statement' field"
-        assert isinstance(tool_def["statement"], str), \
-            f"Tool {tool_name} statement is not a string"
-        assert len(tool_def["statement"]) > 0, \
-            f"Tool {tool_name} has empty statement"
+    result = await tool.ainvoke({"keyword": "test", "limit": 1})
+    data = json.loads(result) if isinstance(result, str) else result
+    
+    # Accept None or list (no results in test fixture)
+    assert data is None or isinstance(data, list), "Tool should return a list or None"
 
 
-@pytest.mark.asyncio
-async def test_sorbobot_execute_cypher_readonly_exists(sorbobot_tools_dict):
-    """Test that sorbobot-execute-cypher-readonly tool exists."""
-    tool_def = sorbobot_tools_dict.get("sorbobot-execute-cypher-readonly")
-    assert tool_def is not None, \
-        "sorbobot-execute-cypher-readonly tool not found"
-    # This tool type may not have 'parameters' or 'statement' fields
-    # It's a different type of tool, just verify it exists
