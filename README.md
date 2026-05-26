@@ -6,12 +6,30 @@ Tooling and skills for AI-powered access to the CRISalid institutional knowledge
 
 ## MCP Toolbox
 
-Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), a lightweight server that exposes named Cypher queries as MCP tools. Two toolsets are available:
+Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), a lightweight server that exposes named Cypher queries as MCP tools. Two main tool collections are available:
+
+### CRISalid Tools
 
 | Toolset | Tools | Use case |
 |---|---|---|
 | `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` | Clients needing curated domain tools |
 | `crisalid-unrestricted` | `get-crisalid-schema`, `list-person-publications`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
+
+### SorboBot Tools
+
+SorboBot provides specialized tools for domain analysis and researcher expertise queries:
+
+| Toolset | Tools | Use case |
+|---|---|---|
+| `sorbobot-restricted` | `sorbobot-search-domains`, `sorbobot-get-domain-authors`, `sorbobot-get-parent-domains`, `sorbobot-get-person-expertise` | Domain research and expertise discovery |
+| `sorbobot-full` | All restricted tools + `sorbobot-execute-cypher-readonly` | Advanced domain analysis with ad-hoc Cypher access |
+
+**SorboBot tool descriptions:**
+- `sorbobot-search-domains` — Find research domains by keyword with publication weighting
+- `sorbobot-get-domain-authors` — Discover researchers working in specific domains
+- `sorbobot-get-parent-domains` — Navigate domain hierarchy to broaden/narrow scope
+- `sorbobot-get-person-expertise` — Find research domains for a specific researcher
+- `sorbobot-execute-cypher-readonly` — Execute read-only Cypher queries for advanced analysis
 
 ### Run the MCP server
 
@@ -19,7 +37,11 @@ First, install the toolbox. Two options:
 
 **Via npx (no installation required):**
 ```bash
+# CRISalid tools only:
 npx @toolbox-sdk/server --config tools.yaml
+
+# CRISalid + SorboBot tools:
+npx @toolbox-sdk/server --config tools.yaml tools-sorbobot.yaml
 ```
 
 **Via binary (Linux):** 
@@ -39,8 +61,14 @@ Finally, start the server:
 ```bash
 cd mcp-toolbox
 set -a && source .env && set +a
+
+# CRISalid tools only:
 ./toolbox --config tools.yaml            # without authentication
 ./toolbox --config tools-auth.yaml      # with Keycloak authentication
+
+# CRISalid + SorboBot tools:
+./toolbox --config tools.yaml tools-sorbobot.yaml       # without authentication
+./toolbox --config tools-auth.yaml tools-sorbobot.yaml # with Keycloak authentication
 ```
 
 The server listens on `http://127.0.0.1:5000` by default.
