@@ -20,10 +20,60 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 
 ## Toolsets
 
-| Toolset | Tools |
-|---|---|
-| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications`, `list-person-concepts`, `search-person-by-name` |
-| `crisalid-unrestricted` | above + `execute-cypher-readonly` |
+The MCP toolbox provides multiple **named toolsets** to control which tools are available in different contexts:
+
+| Toolset | Purpose | Tools |
+|---|---|---|
+| `crisalid-restricted` | Curated CRISalid tools, no raw Cypher | `get-crisalid-schema`, `list-person-publications`, `list-person-concepts`, `search-person-by-name` |
+| `crisalid-unrestricted` | Unrestricted CRISalid access | above + `execute-cypher-readonly` |
+| `sorbobot-restricted` | SorboBot domain analysis tools, no raw Cypher | `sorbobot-search-domains`, `sorbobot-get-domain-authors`, `sorbobot-get-parent-domains`, `sorbobot-get-person-expertise` |
+| `sorbobot-full` | Unrestricted SorboBot access | above + `sorbobot-execute-cypher-readonly` |
+
+**Why multiple toolsets?**
+- **Separation of concerns**: CRISalid tools (persons, publications, concepts) vs. SorboBot tools (domain/expertise hierarchy)
+- **Access control**: Clients can load `restricted` toolsets without access to raw Cypher (`execute-cypher-readonly`), limiting to curated queries only
+- **Flexibility**: Applications can choose which domain (CRISalid or SorboBot) and which access level they need
+
+## SorboBot Domain Analysis Tools
+
+SorboBot provides specialized tools for navigating domain and expertise hierarchies in the knowledge graph. Designed for domain analysis, researcher discovery, and expertise mapping.
+
+### Available Tools
+
+| Tool | Purpose | Parameters |
+|---|---|---|
+| `sorbobot-search-domains` | Find domains by keyword with semantic similarity | `keyword` (str), `limit` (int), `similarity_threshold` (float, 0.0–1.0) |
+| `sorbobot-get-domain-authors` | List researchers working in a domain | `domain` (str), `limit` (int) |
+| `sorbobot-get-parent-domains` | Navigate domain hierarchy upward | `domain` (str) |
+| `sorbobot-get-person-expertise` | List domains where a person has published | `person_name` (str), `limit` (int) |
+| `sorbobot-execute-cypher-readonly` | Direct Cypher query access (unrestricted only) | `query` (str), `params` (dict) |
+
+### Use Cases
+
+- **Domain discovery**: Search domains by keyword, find researchers working in a domain
+- **Expertise mapping**: Identify where a researcher has published, navigate domain hierarchies
+- **Knowledge graph navigation**: Use restricted toolsets for curated domain analysis, or unrestricted for ad-hoc queries
+
+### Sample Client Usage
+
+```python
+from toolbox_langchain import aload_toolset
+
+# Load the restricted SorboBot toolset (no raw Cypher)
+toolset = await aload_toolset('sorbobot-restricted', client=toolbox_client)
+
+# Invoke tools
+domains = await toolset.tools['sorbobot-search-domains'].ainvoke({
+    'keyword': 'machine learning',
+    'limit': 5,
+    'similarity_threshold': 0.7
+})
+
+# Or load the full toolset to access execute-cypher-readonly
+full_toolset = await aload_toolset('sorbobot-full', client=toolbox_client)
+```
+
+See `samples/` for complete examples.
 
 ## Authentication
 
@@ -34,7 +84,19 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 - **Client-side env vars**: `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_SSL_VERIFY` — used by sample scripts only
 - Clients use `client_credentials` grant; token getter passed via `auth_token_getters` to `aload_toolset()`
 
-> **Important**: `tools.yaml` and `tools-auth.yaml` must always be kept in sync. Any tool added to `tools.yaml` must also be added to `tools-auth.yaml` (with `authRequired: [crisalid-keycloak]` for curated tools), and both toolset lists must be updated identically.
+### Configuration Synchronization (Important)
+
+**MCP limitation**: The toolbox server can only load a single configuration file (`tools.yaml` OR `tools-auth.yaml`). Therefore, **both files must be kept in sync**:
+
+1. **Any tool added to `tools.yaml`** must also be added to `tools-auth.yaml`
+2. **All toolsets must be identical** in both files (names, tools lists, order)
+3. **Only difference**: In `tools-auth.yaml`, add `authRequired: [crisalid-keycloak]` to curated tools
+4. **Recommended workflow**:
+   - Maintain `tools.yaml` as the canonical version (all tools + toolsets)
+   - Mirror all content to `tools-auth.yaml`, adding auth annotations only
+   - Run tests against `tools.yaml` locally, then switch to `tools-auth.yaml` on the deployed server
+
+**Why duplication?** The MCP SDK does not support YAML factorization (includes, anchors, references). Complete duplication is necessary to avoid inconsistencies between environments.
 
 ## Docker
 

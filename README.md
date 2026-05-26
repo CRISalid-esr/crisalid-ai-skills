@@ -37,11 +37,8 @@ First, install the toolbox. Two options:
 
 **Via npx (no installation required):**
 ```bash
-# CRISalid tools only:
+# Both CRISalid and SorboBot tools (all toolsets):
 npx @toolbox-sdk/server --config tools.yaml
-
-# CRISalid + SorboBot tools:
-npx @toolbox-sdk/server --config tools.yaml tools-sorbobot.yaml
 ```
 
 **Via binary (Linux):** 
@@ -62,13 +59,11 @@ Finally, start the server:
 cd mcp-toolbox
 set -a && source .env && set +a
 
-# CRISalid tools only:
-./toolbox --config tools.yaml            # without authentication
-./toolbox --config tools-auth.yaml      # with Keycloak authentication
+# Both CRISalid and SorboBot tools available (authentication disabled):
+./toolbox --config tools.yaml
 
-# CRISalid + SorboBot tools:
-./toolbox --config tools.yaml tools-sorbobot.yaml       # without authentication
-./toolbox --config tools-auth.yaml tools-sorbobot.yaml # with Keycloak authentication
+# With Keycloak authentication (recommended for production):
+./toolbox --config tools-auth.yaml
 ```
 
 The server listens on `http://127.0.0.1:5000` by default.
@@ -79,6 +74,8 @@ Add `--ui` to also launch a web interface for browsing and manually invoking too
 ./toolbox --config tools.yaml --ui
 # UI available at http://127.0.0.1:5000/ui
 ```
+
+**Note:** Both `tools.yaml` and `tools-auth.yaml` contain all tools and toolsets. The only difference is that `tools-auth.yaml` adds Keycloak OIDC authentication to curated tools. See the [Configuration Synchronization](#configuration-synchronization) section in `CLAUDE.md` for details.
 
 ### Run with Docker
 
@@ -236,10 +233,14 @@ docker run --publish=7475:7474 --publish=7688:7687 \
 
 ```bash
 cd mcp-toolbox
-set -a && source .env.test && set +a   # points to bolt://localhost:7688, no real credentials
+set -a && source .env.test && set +a   # points to bolt://localhost:7688, no auth required
 npx @toolbox-sdk/server --config tools.yaml
 # or: ./toolbox --config tools.yaml  (if using the downloaded binary)
 ```
+
+The server loads all four toolsets automatically:
+- `crisalid-restricted` and `crisalid-unrestricted` — CRISalid tools
+- `sorbobot-restricted` and `sorbobot-full` — SorboBot tools
 
 **3. Run the test suite**
 
