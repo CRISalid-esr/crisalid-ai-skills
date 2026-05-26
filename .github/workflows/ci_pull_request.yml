@@ -40,8 +40,12 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test
         run: |
-          npx --yes @toolbox-sdk/server --configs tools.yaml tools-sorbobot.yaml &
+          # Start server with tools.yaml (primary config)
+          npx --yes @toolbox-sdk/server --config tools.yaml &
+          # Give it time to start
           timeout 30 bash -c 'until nc -z localhost 5000; do sleep 1; done'
+          # Verify server is running
+          curl -s http://localhost:5000/health || echo "Server health check failed"
 
       - name: Run tests
         run: uv run pytest tests/ -v
