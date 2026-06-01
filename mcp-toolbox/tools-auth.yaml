@@ -581,6 +581,58 @@ statement: |
 ---
 
 kind: tool
+name: count-organization-unit-members-with-identifier
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Count and list the direct members of a given OrganizationUnit (by UID) that
+  do — and do not — have an external identifier of a given type (e.g. 'orcid',
+  'idref', 'idhals', 'scopus'). Returns the total member count, the count and
+  percentage of members carrying the identifier, and the full member list for
+  both groups — computed in a single deterministic query. Use this to answer
+  questions such as "what proportion of LS2N researchers have an ORCID?" or
+  "which members of the lab have no IdRef?"; do NOT enumerate members and check
+  their identifiers one by one. Resolve the unit UID first with
+  search-organization-unit-by-name. Only direct members (the MEMBER_OF relation
+  from Person nodes) are considered, not members of child units.
+parameters:
+  - name: organization_unit_uid
+    type: string
+    description: Unique identifier of the OrganizationUnit (OrganizationUnit.uid)
+  - name: identifier_type
+    type: string
+    description: AgentIdentifier type to test for, e.g. orcid, idref, idhals, scopus, hal, openalex, ror, wikidata, isni, viaf
+    default: orcid
+statement: |
+  MATCH (org:OrganizationUnit {uid: $organization_unit_uid})
+  OPTIONAL MATCH (person:Person)-[:MEMBER_OF]->(org)
+  WITH org, collect(DISTINCT person) AS all_members
+  WITH org, [m IN all_members WHERE m IS NOT NULL] AS members
+  WITH org, members,
+    [m IN members WHERE exists(
+      (m)-[:HAS_IDENTIFIER]->(:AgentIdentifier {type: $identifier_type}) )] AS with_id,
+    [m IN members WHERE NOT exists(
+      (m)-[:HAS_IDENTIFIER]->(:AgentIdentifier {type: $identifier_type}) )] AS without_id
+  RETURN
+    org.uid AS organization_unit_uid,
+    $identifier_type AS identifier_type,
+    size(members) AS member_count,
+    size(with_id) AS with_identifier_count,
+    size(without_id) AS without_identifier_count,
+    CASE WHEN size(members) = 0 THEN 0.0
+         ELSE round(100.0 * size(with_id) / size(members), 1) END AS percent_with_identifier,
+    [m IN with_id | {
+      person_uid: m.uid,
+      person_name: m.display_name,
+      identifier_values: [(m)-[:HAS_IDENTIFIER]->(i:AgentIdentifier {type: $identifier_type}) | i.value]
+    }] AS members_with_identifier,
+    [m IN without_id | {person_uid: m.uid, person_name: m.display_name}] AS members_without_identifier
+
+---
+
+kind: tool
 name: publications-by-theme
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -666,6 +718,7 @@ tools:
   - search-researchers-by-concept
   - search-organization-unit-by-name
   - get-organization-unit-members
+  - count-organization-unit-members-with-identifier
   - publications-by-theme
 
 ---
@@ -686,5 +739,6 @@ tools:
   - search-researchers-by-concept
   - search-organization-unit-by-name
   - get-organization-unit-members
+  - count-organization-unit-members-with-identifier
   - publications-by-theme
   - execute-cypher-readonly
