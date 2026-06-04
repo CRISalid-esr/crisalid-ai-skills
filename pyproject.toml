@@ -8,6 +8,7 @@ dependencies = [
     "langchain-openai>=1.1.14",
     "langgraph>=1.1.8",
     "toolbox-langchain>=1.0.0",
+    "toolbox-core @ git+https://github.com/googleapis/mcp-toolbox-sdk-python.git#subdirectory=packages/toolbox-core",
 ]
 
 [dependency-groups]
