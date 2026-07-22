@@ -277,6 +277,35 @@ statement: |
 ---
 
 kind: tool
+name: sorbobot-search-person-by-name-fuzzy
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Fallback fuzzy search for an internal person by display name, for use when
+  the person_fulltext_name index is unavailable.
+parameters:
+  - name: name
+    type: string
+    description: Name to search for — first name, last name, or both, in any order
+  - name: max_results
+    type: integer
+    description: Maximum number of candidates to return
+    default: 50
+statement: |
+  WITH [w IN split($name, ' ') WHERE size(w) > 2] AS words
+  MATCH (person:Person)
+  WHERE person.external = false
+    AND person.display_name IS NOT NULL
+    AND size(person.display_name) > 3
+    AND ANY(word IN words WHERE toLower(person.display_name) CONTAINS toLower(word))
+  RETURN DISTINCT person.uid AS uid, person.display_name AS display_name, person.external AS external
+  LIMIT $max_results
+
+---
+
+kind: tool
 name: list-person-collaborators
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -650,6 +679,388 @@ statement: |
 
 ---
 
+kind: tool
+name: get-domains-by-paths
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Look up Concept nodes from the OpenAlex research taxonomy
+  (Domain/Field/SubField/Topic) by their full_path.
+parameters:
+  - name: full_paths
+    type: string
+    description: Comma-separated list of Concept.full_path values to look up
+  - name: similarity_threshold
+    type: float
+    description: Minimum HAS_CONCEPT similarity for a document to count toward nb_docs
+    default: 0.0
+statement: |
+  WITH split($full_paths, ',') AS path_list
+  UNWIND path_list AS raw_path
+  WITH collect(trim(raw_path)) AS full_paths
+  MATCH (domain:Concept)
+  WHERE domain.full_path IN full_paths
+  CALL {
+    WITH domain
+    OPTIONAL MATCH (domain)<-[:BROADER*0..3]-(descendant:Concept)
+    WITH domain, collect(DISTINCT descendant) AS descendants
+    WITH [domain] + descendants AS subtree
+    UNWIND subtree AS node
+    OPTIONAL MATCH (doc:Document)-[r:HAS_CONCEPT]->(node)
+    WHERE r.similarity >= $similarity_threshold
+    RETURN count(DISTINCT doc) AS nb_docs
+  }
+  RETURN domain.name AS name, domain.full_path AS full_path,
+         domain.depth AS depth, domain.type AS type, nb_docs,
+         domain.description AS description
+  ORDER BY
+    CASE WHEN nb_docs > 0 THEN 0 ELSE 1 END,
+    domain.depth ASC,
+    nb_docs DESC
+
+---
+
+kind: tool
+name: sorbobot-get-domains-by-uid
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Look up Concept nodes from the OpenAlex research taxonomy
+  (Domain/Field/SubField/Topic) by their uid. name/description come from
+  HAS_PREF_LABEL/HAS_DEFINITION Literal nodes, type from the node's own
+  Domain/Field/SubField/Topic label — the real schema keeps no flat
+  name/type/depth/full_path properties on Concept nodes.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values to look up
+  - name: similarity_threshold
+    type: float
+    description: Minimum HAS_TOPIC similarity for a document to count toward nb_docs
+    default: 0.0
+statement: |
+  WITH split($uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH collect(trim(raw_uid)) AS uids
+  MATCH (domain:Concept)
+  WHERE domain.uid IN uids
+  OPTIONAL MATCH (domain)-[:HAS_PREF_LABEL]->(pref:Literal)
+  OPTIONAL MATCH (domain)-[:HAS_DEFINITION]->(def:Literal)
+  WITH domain,
+       head(collect(DISTINCT pref.value)) AS name,
+       head(collect(DISTINCT def.value)) AS description,
+       [lbl IN labels(domain) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
+  CALL {
+    WITH domain
+    OPTIONAL MATCH (domain)<-[:BROADER*0..3]-(descendant:Concept)
+    WITH domain, collect(DISTINCT descendant) AS descendants
+    WITH [domain] + descendants AS subtree
+    UNWIND subtree AS node
+    OPTIONAL MATCH (doc:Document)-[r:HAS_TOPIC]->(node)
+    WHERE r.similarity >= $similarity_threshold
+    RETURN count(DISTINCT doc) AS nb_docs
+  }
+  WITH domain, name, type, description, nb_docs,
+       CASE type WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3 END AS depth_rank
+  RETURN domain.uid AS uid, name, type, description, nb_docs
+  ORDER BY
+    CASE WHEN nb_docs > 0 THEN 0 ELSE 1 END,
+    depth_rank ASC,
+    nb_docs DESC
+
+---
+
+kind: tool
+name: sorbobot-get-child-domains
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the descendant Concept nodes (OpenAlex taxonomy) located depth_delta
+  levels below each given Concept (uid), via BROADER relationships (traversed
+  from child to parent, so descendants are found by following incoming
+  BROADER edges). depth_delta is enforced on the BROADER path length itself —
+  Concept nodes carry no stored depth property.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of parent Concept.uid values
+  - name: depth_delta
+    type: integer
+    description: Number of levels below the parent to descend (1 = direct children)
+    default: 1
+statement: |
+  WITH split($uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH trim(raw_uid) AS parent_uid
+  MATCH (parent:Concept {uid: parent_uid})
+  MATCH path = (parent)<-[:BROADER*1..5]-(child:Concept)
+  WHERE length(path) = $depth_delta
+  WITH DISTINCT child
+  OPTIONAL MATCH (child)-[:HAS_PREF_LABEL]->(pref:Literal)
+  RETURN child.uid AS uid,
+         head(collect(DISTINCT pref.value)) AS name,
+         [lbl IN labels(child) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
+  ORDER BY name
+
+---
+
+kind: tool
+name: sorbobot-get-parent-domains
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the ancestor Concept nodes (OpenAlex taxonomy) located depth_delta
+  levels above each given Concept (uid), via BROADER relationships.
+  depth_delta is enforced on the BROADER path length itself — Concept nodes
+  carry no stored depth property.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of child Concept.uid values
+  - name: depth_delta
+    type: integer
+    description: Number of levels above the child to ascend (1 = direct parent)
+    default: 1
+statement: |
+  WITH split($uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH trim(raw_uid) AS child_uid
+  MATCH (child:Concept {uid: child_uid})
+  MATCH path = (child)-[:BROADER*1..5]->(parent:Concept)
+  WHERE length(path) = $depth_delta
+  WITH DISTINCT parent
+  OPTIONAL MATCH (parent)-[:HAS_PREF_LABEL]->(pref:Literal)
+  WITH parent,
+       head(collect(DISTINCT pref.value)) AS name,
+       [lbl IN labels(parent) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
+  WITH parent, name, type,
+       CASE type WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3 END AS depth_rank
+  RETURN parent.uid AS uid, name, type
+  ORDER BY depth_rank DESC
+
+---
+
+kind: tool
+name: sorbobot-list-domain-experts
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  List internal researchers (external: false) who authored, directed, or
+  presented documents tagged with any of the given OpenAlex Concept nodes
+  (matched by uid) OR any of their BROADER descendants down to topic level,
+  via HAS_TOPIC (documents only ever link directly to Topic-level nodes, so
+  this naturally bottoms out there regardless of which level was queried).
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values
+  - name: limit
+    type: integer
+    description: Maximum number of researchers to return
+    default: 200
+statement: |
+  WITH split($uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH collect(trim(raw_uid)) AS uids
+  MATCH (queried:Concept)
+  WHERE queried.uid IN uids
+  OPTIONAL MATCH (queried)<-[:BROADER*0..3]-(descendant:Concept)
+  WITH collect(DISTINCT queried) AS queried_nodes, collect(DISTINCT descendant) AS descendant_nodes
+  UNWIND queried_nodes + descendant_nodes AS domain
+  WITH DISTINCT domain
+  WHERE domain IS NOT NULL
+  MATCH (doc:Document)-[r:HAS_TOPIC]->(domain)
+  MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)
+  WHERE ANY(role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ])
+  MATCH (person:Person)-[:HAS_CONTRIBUTION]->(contrib)
+  WHERE person.display_name IS NOT NULL AND person.external = false
+  MATCH (doc)-[:HAS_TITLE]->(title:Literal)
+  OPTIONAL MATCH (domain)-[:HAS_PREF_LABEL]->(domain_pref:Literal)
+  WITH person, domain, r.similarity AS similarity, doc, title,
+       head(collect(DISTINCT domain_pref.value)) AS domain_name,
+       [lbl IN labels(domain) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type
+  OPTIONAL MATCH (doc)-[:HAS_SUBJECT]->(concept:Concept)-[:HAS_PREF_LABEL]->(keyword:Literal)
+  WITH person, person.display_name AS author_name, domain, domain_name, domain_type, similarity,
+       doc, title, COLLECT(DISTINCT keyword.value) AS doc_keywords
+  WITH person, author_name,
+       COLLECT(DISTINCT {
+         domain_uid: domain.uid,
+         domain_name: domain_name,
+         domain_type: domain_type,
+         similarity: similarity
+       }) AS domains,
+       COUNT(DISTINCT doc) AS nb_publications,
+       COLLECT(DISTINCT {
+         uid: doc.uid,
+         title: title.value,
+         keywords: doc_keywords,
+         domain_uid: domain.uid,
+         domain_name: domain_name,
+         type: domain_type
+       }) AS articles
+  RETURN person.uid AS person_uid,
+         author_name AS author,
+         domains,
+         nb_publications,
+         articles
+  ORDER BY nb_publications DESC
+  LIMIT $limit
+
+---
+
+kind: tool
+name: sorbobot-list-person-research-domains
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  List the research Concept nodes (OpenAlex taxonomy) most associated with an
+  internal person's publications (via HAS_TOPIC), ranked by number of
+  publications.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+  - name: min_depth
+    type: integer
+    description: >-
+      Minimum taxonomy level to include (2=Domain, 3=Field, 4=SubField,
+      5=Topic — excludes very broad top-level domains). Concept nodes carry
+      no stored depth property, so this is computed from labels().
+    default: 2
+  - name: limit
+    type: integer
+    description: Maximum number of domains to return, ranked by publication count
+    default: 10
+statement: |
+  MATCH (p:Person {uid: $person_uid, external: false})
+  MATCH (p)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  MATCH (doc)-[:HAS_TOPIC]->(domain:Concept)
+  WITH p, doc,
+       [lbl IN labels(domain) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type,
+       domain
+  WITH p, doc, domain, domain_type,
+       CASE domain_type WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3 END AS domain_depth
+  WHERE domain_depth >= $min_depth
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
+  OPTIONAL MATCH (domain)-[:HAS_PREF_LABEL]->(domain_pref:Literal)
+  WITH p, domain, domain_type, head(collect(DISTINCT domain_pref.value)) AS domain_name,
+       doc, doc.publication_date AS pub_date,
+       head(collect(toLower(trim(title.value)))) AS norm_title
+  WITH p, domain, domain_type, domain_name,
+       CASE WHEN norm_title IS NULL THEN doc.uid
+            ELSE norm_title + '|' + toString(coalesce(pub_date, ''))
+       END AS dedup_key
+  WITH p, domain, domain_type, domain_name, count(DISTINCT dedup_key) AS nb_publications
+  ORDER BY nb_publications DESC
+  LIMIT $limit
+  RETURN p.uid AS uid, p.display_name AS display_name,
+         domain_name AS domain_name, domain.uid AS domain_uid,
+         domain_type AS domain_type, nb_publications
+
+---
+
+kind: tool
+name: sorbobot-get-concept-hierarchy
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return, for each given OpenAlex Concept uid, its full ancestor chain from
+  Domain down to itself (inclusive), via BROADER relationships — one row per
+  (uid, ancestor) pair. Callers rebuild the display chain per uid by sorting
+  rows on `dist` descending (Domain first, the queried node itself last at
+  dist=0).
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values to resolve
+statement: |
+  WITH split($uids, ',') AS uid_list
+  UNWIND uid_list AS raw_uid
+  WITH trim(raw_uid) AS uid
+  MATCH (node:Concept {uid: uid})
+  OPTIONAL MATCH path = (node)-[:BROADER*0..3]->(ancestor:Concept)
+  WITH uid, ancestor, length(path) AS dist
+  RETURN uid AS uid,
+         ancestor.uid AS ancestor_uid,
+         [(ancestor)-[:HAS_PREF_LABEL]->(l:Literal) | l.value][0] AS ancestor_name,
+         [lbl IN labels(ancestor) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS ancestor_type,
+         dist
+  ORDER BY uid, dist DESC
+
+---
+
+kind: tool
+name: sorbobot-top-researchers-by-publications
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Rank internal researchers (external: false) by number of distinct
+  publications (Document nodes), most published first. Use this instead of
+  execute-cypher-readonly for "top N researchers by publication count"
+  questions — counting via a pattern expression inside count() is invalid
+  Cypher and a common source of failed ad-hoc queries.
+parameters:
+  - name: limit
+    type: integer
+    description: Maximum number of researchers to return
+    default: 10
+statement: |
+  MATCH (p:Person)-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE p.external = false
+  WITH p, count(DISTINCT doc) AS nb_publications
+  ORDER BY nb_publications DESC
+  LIMIT $limit
+  RETURN p.uid AS uid, p.display_name AS display_name, nb_publications
+
+---
+
+kind: tool
+name: sorbobot-top-journals-by-articles
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Rank Journal nodes by number of distinct published articles (Document
+  nodes linked via PUBLISHED_IN), most articles first. Use this instead of
+  execute-cypher-readonly for "which journal published the most articles"
+  questions — do not confuse Journal with the SourceOrganization/
+  AuthorityOrganization institutional affiliations of contributors, which is
+  a completely different relationship chain.
+parameters:
+  - name: limit
+    type: integer
+    description: Maximum number of journals to return
+    default: 10
+statement: |
+  MATCH (doc:Document)-[:PUBLISHED_IN]->(j:Journal)
+  WITH j, count(DISTINCT doc) AS nb_articles
+  ORDER BY nb_articles DESC
+  LIMIT $limit
+  RETURN j.uid AS uid, head(j.titles) AS title, nb_articles
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -691,213 +1102,20 @@ tools:
 
 ---
 
-# SorboBot tools — MCP-compatible Cypher tools for the Sorbonne research graph
-
-kind: tool
-name: sorbobot-search-domains
-type: neo4j-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Search for research Domain nodes whose name matches a keyword.
-  Only counts Document→Domain links whose HAS_DOMAIN similarity meets the threshold,
-  so domains with few qualifying publications rank lower.
-  Returns name, full_path, depth, and nb_docs (qualifying document count).
-  Call this FIRST when looking for experts in a research field, then pass the
-  returned full_path values to sorbobot-get-domain-authors.
-parameters:
-  - name: keyword
-    type: string
-    description: Research domain keyword in English (e.g. "natural language processing")
-  - name: similarity_threshold
-    type: float
-    description: |
-      Minimum r.similarity on HAS_DOMAIN edges used for counting qualifying documents (0–1).
-      Applied only to the document count — NOT to author retrieval.
-      Default 0.63.
-    default: 0.63
-  - name: min_depth
-    type: integer
-    description: Minimum domain hierarchy depth (2 = sub-field, 1 = top-level). Default 2.
-    default: 2
-  - name: limit
-    type: integer
-    description: Maximum number of domains to return. Default 20.
-    default: 20
-statement: |
-  MATCH (domain:Domain)
-  WHERE toLower(domain.name) CONTAINS toLower($keyword)
-    AND domain.depth >= $min_depth
-    AND domain.depth <= 5
-  OPTIONAL MATCH (doc:Document)-[r:HAS_DOMAIN]->(domain)
-  WHERE r.similarity >= $similarity_threshold
-  WITH domain, count(doc) AS nb_docs
-  ORDER BY
-    CASE WHEN nb_docs > 0 THEN 0 ELSE 1 END,
-    domain.depth ASC,
-    nb_docs DESC
-  LIMIT $limit
-  RETURN
-    domain.name      AS name,
-    domain.full_path AS full_path,
-    domain.depth     AS depth,
-    nb_docs
-
----
-
-kind: tool
-name: sorbobot-get-domain-authors
-type: neo4j-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Find internal Sorbonne researchers (Person.external = false) whose publications
-  are associated with the given domain full_paths.
-  IMPORTANT: No HAS_DOMAIN similarity filter is applied here — the similarity
-  threshold is only used at the domain-finding stage (sorbobot-search-domains).
-  Applying it at this stage would incorrectly exclude many publications.
-  Returns authors ranked by number of qualifying publications, with a sample of
-  article titles and the domain paths they belong to.
-  Use after sorbobot-search-domains (and optionally sorbobot-judge-domains).
-  For adaptive scope adjustment, use sorbobot-get-parent-domains when too few
-  authors are returned, or query child domains when too many.
-parameters:
-  - name: domain_paths
-    type: string
-    description: Comma-separated list of Domain.full_path values
-  - name: limit
-    type: integer
-    description: Maximum number of authors to return. Default 20.
-    default: 20
-statement: |
-  WITH split($domain_paths, ',') AS paths
-  MATCH (domain:Domain)
-  WHERE domain.full_path IN [p IN paths | trim(p)]
-  MATCH (doc:Document)-[:HAS_DOMAIN]->(domain)
-  MATCH (doc)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(p:Person)
-  WHERE p.external = false AND p.display_name IS NOT NULL
-  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(t:Literal)
-  WITH p, domain, doc, collect(t.value)[0] AS doc_title
-  WITH p,
-       count(DISTINCT doc)                AS nb_publications,
-       collect(DISTINCT domain.name)[..3] AS sample_domains,
-       collect(DISTINCT {
-         uid:   doc.uid,
-         title: coalesce(doc_title, doc.uid),
-         path:  domain.full_path
-       })[..10]                           AS sample_articles
-  ORDER BY nb_publications DESC
-  LIMIT $limit
-  RETURN
-    p.uid            AS uid,
-    p.display_name   AS display_name,
-    nb_publications,
-    sample_domains,
-    sample_articles
-
----
-
-kind: tool
-name: sorbobot-get-parent-domains
-type: neo4j-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Return the parent domains (one level up in the OpenAlex hierarchy) for the
-  given domain full_paths. Use for ADAPTIVE SEARCH: when sorbobot-get-domain-authors
-  returns too few researchers (< 10), call this tool to get broader parent domains,
-  then retry sorbobot-get-domain-authors with the parent full_paths.
-parameters:
-  - name: domain_paths
-    type: string
-    description: Comma-separated list of Domain.full_path values
-statement: |
-  WITH split($domain_paths, ',') AS paths
-  MATCH (child:Domain)
-  WHERE child.full_path IN [p IN paths | trim(p)]
-  MATCH (child)-[:HAS_PARENT]->(parent:Domain)
-  RETURN DISTINCT
-    parent.name      AS name,
-    parent.full_path AS full_path,
-    parent.depth     AS depth
-  ORDER BY parent.depth DESC
-
----
-
-kind: tool
-name: sorbobot-get-person-expertise
-type: neo4j-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Return the top research domains for a named internal Sorbonne researcher.
-  Domains are ranked by number of associated publications.
-  Handles partial names (substring match on display_name).
-  For misspelled names, try the closest substring of the name you know.
-  Use when the user asks what a specific person researches or works on.
-parameters:
-  - name: name
-    type: string
-    description: Full or partial display name of the researcher
-  - name: limit
-    type: integer
-    description: Number of top domains to return. Default 10.
-    default: 10
-statement: |
-  MATCH (p:Person)
-  WHERE toLower(p.display_name) CONTAINS toLower($name)
-    AND p.external = false
-  WITH p ORDER BY p.display_name ASC LIMIT 5
-  MATCH (p)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
-  MATCH (doc)-[:HAS_DOMAIN]->(domain:Domain)
-  WHERE domain.depth >= 2
-  WITH p, domain, count(DISTINCT doc) AS nb_publications
-  ORDER BY nb_publications DESC
-  LIMIT $limit
-  RETURN
-    p.uid            AS uid,
-    p.display_name   AS display_name,
-    domain.name      AS domain_name,
-    domain.full_path AS domain_path,
-    nb_publications
-
----
-
-kind: tool
-name: sorbobot-execute-cypher-readonly
-type: neo4j-execute-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Execute arbitrary read-only Cypher queries for SorboBot analysis.
-readOnly: true
-
----
-
-# Restricted toolset: curated SorboBot domain tools only, no raw Cypher access.
-# Load with: client.load_toolset("sorbobot-restricted")
+# SorboBot toolset: used by the sorbobot agent
+# Load with: client.load_toolset("sorbobot")
 kind: toolset
-name: sorbobot-restricted
+name: sorbobot
 tools:
-  - sorbobot-search-domains
-  - sorbobot-get-domain-authors
+  - sorbobot-search-person-by-name-fuzzy
+  - sorbobot-get-domains-by-uid
+  - sorbobot-get-child-domains
   - sorbobot-get-parent-domains
-  - sorbobot-get-person-expertise
-
----
-
-# Unrestricted toolset: all SorboBot tools + raw read-only Cypher for advanced queries.
-# Load with: client.load_toolset("sorbobot-full")
-kind: toolset
-name: sorbobot-full
-tools:
-  - sorbobot-search-domains
-  - sorbobot-get-domain-authors
-  - sorbobot-get-parent-domains
-  - sorbobot-get-person-expertise
-  - sorbobot-execute-cypher-readonly
+  - sorbobot-list-domain-experts
+  - sorbobot-list-person-research-domains
+  - sorbobot-get-concept-hierarchy
+  - sorbobot-top-researchers-by-publications
+  - sorbobot-top-journals-by-articles
+  - sorbobot-get-domains-by-paths
+  - sorbobot-get-domains-by-paths
+  - sorbobot-search-person-by-name-fuzzy
