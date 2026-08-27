@@ -21,7 +21,7 @@ jobs:
           NEO4J_apoc_import_file_enabled: 'true'
           NEO4J_apoc_import_file_use__neo4j__config: 'true'
         ports:
-          - 7688:7687
+          - 7690:7687
         options: --health-cmd "neo4j-admin server status" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Start MCP Toolbox server
         working-directory: mcp-toolbox
         env:
-          NEO4J_URI: bolt://localhost:7688
+          NEO4J_URI: bolt://localhost:7690
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test
         run: |

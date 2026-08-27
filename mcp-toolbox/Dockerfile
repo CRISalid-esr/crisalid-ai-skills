@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim
 
-ARG TOOLBOX_VERSION=v1.1.0
+ARG TOOLBOX_VERSION=v1.9.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && curl -fsSL \

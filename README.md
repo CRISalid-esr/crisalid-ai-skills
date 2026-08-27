@@ -46,7 +46,7 @@ npx @toolbox-sdk/server --config tools.yaml
 Either download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
 Or directly run this from folder "mcp-toolbox":
 ```bash
-export VERSION=1.2.0
+export VERSION=1.9.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
 chmod +x toolbox
 ```
@@ -86,7 +86,7 @@ A `Dockerfile` is provided in `mcp-toolbox/`. It downloads the official toolbox 
 ```bash
 docker build -t crisalid-graph-mcp mcp-toolbox/
 # Pin a specific toolbox version:
-docker build --build-arg TOOLBOX_VERSION=v1.1.0 -t crisalid-graph-mcp mcp-toolbox/
+docker build --build-arg TOOLBOX_VERSION=v1.8.0 -t crisalid-graph-mcp mcp-toolbox/
 ```
 
 **Run:**
@@ -215,12 +215,16 @@ uv run python samples/load_restricted_toolset_authenticated.py
 
 ### Run the tests
 
-Tests require a dedicated Neo4j instance on port 7688 (separate from the production database) and the toolbox server running against it.
+Tests require a dedicated Neo4j instance on port 7690 (separate from the production database) and the toolbox server running against it.
+
+> Not 7688: on a machine running Neo4j Desktop that port is its routing
+> connector, backed by the same process as the real database — the suite runs
+> `MATCH (n) DETACH DELETE n`.
 
 **1. Start the test Neo4j container**
 
 ```bash
-docker run --publish=7475:7474 --publish=7688:7687 \
+docker run --publish=7476:7474 --publish=7690:7687 \
   --env=NEO4J_AUTH=none \
   -e NEO4J_apoc_export_file_enabled=true \
   -e NEO4J_apoc_import_file_enabled=true \
@@ -233,7 +237,7 @@ docker run --publish=7475:7474 --publish=7688:7687 \
 
 ```bash
 cd mcp-toolbox
-set -a && source .env.test && set +a   # points to bolt://localhost:7688, no auth required
+set -a && source .env.test && set +a   # points to bolt://localhost:7690, no real credentials
 npx @toolbox-sdk/server --config tools.yaml
 # or: ./toolbox --config tools.yaml  (if using the downloaded binary)
 ```

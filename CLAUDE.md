@@ -15,7 +15,7 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 
 - `mcp-toolbox/` — toolbox config files (`tools.yaml` no-auth, `tools-auth.yaml` with Keycloak OIDC), `Dockerfile`, `.env.sample`
 - `samples/` — Python client scripts using `toolbox-langchain` (no LLM, direct tool invocation)
-- `tests/` — pytest integration tests against a dedicated test Neo4j instance (port 7688)
+- `tests/` — pytest integration tests against a dedicated test Neo4j instance (port 7690)
 - `.github/workflows/` — CI (lint + tests on PRs), CD (Docker push to DockerHub on dev-main)
 
 ## Toolsets
@@ -115,7 +115,7 @@ uv run ruff check .
 ## Running tests
 
 Tests require running processes outside the IDE:
-1. Neo4j on port 7688 (Docker: `neo4j:5-community`, APOC enabled, `NEO4J_AUTH=none`)
+1. Neo4j on port 7690 (Docker: `neo4j:5-community`, APOC enabled, `NEO4J_AUTH=none`)
 2. Toolbox running against `.env.test`: `set -a && source .env.test && set +a && ./toolbox --config tools.yaml`
 Don't try to start these from the IDE — just check connectivity before running tests and ask the user to start them if they are not running.
 
