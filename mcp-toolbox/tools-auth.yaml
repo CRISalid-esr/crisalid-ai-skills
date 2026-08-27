@@ -680,49 +680,6 @@ statement: |
 ---
 
 kind: tool
-name: get-domains-by-paths
-type: neo4j-cypher
-source: crisalid-neo4j
-authRequired:
-  - crisalid-keycloak
-description: |
-  Look up Concept nodes from the OpenAlex research taxonomy
-  (Domain/Field/SubField/Topic) by their full_path.
-parameters:
-  - name: full_paths
-    type: string
-    description: Comma-separated list of Concept.full_path values to look up
-  - name: similarity_threshold
-    type: float
-    description: Minimum HAS_CONCEPT similarity for a document to count toward nb_docs
-    default: 0.0
-statement: |
-  WITH split($full_paths, ',') AS path_list
-  UNWIND path_list AS raw_path
-  WITH collect(trim(raw_path)) AS full_paths
-  MATCH (domain:Concept)
-  WHERE domain.full_path IN full_paths
-  CALL {
-    WITH domain
-    OPTIONAL MATCH (domain)<-[:BROADER*0..3]-(descendant:Concept)
-    WITH domain, collect(DISTINCT descendant) AS descendants
-    WITH [domain] + descendants AS subtree
-    UNWIND subtree AS node
-    OPTIONAL MATCH (doc:Document)-[r:HAS_CONCEPT]->(node)
-    WHERE r.similarity >= $similarity_threshold
-    RETURN count(DISTINCT doc) AS nb_docs
-  }
-  RETURN domain.name AS name, domain.full_path AS full_path,
-         domain.depth AS depth, domain.type AS type, nb_docs,
-         domain.description AS description
-  ORDER BY
-    CASE WHEN nb_docs > 0 THEN 0 ELSE 1 END,
-    domain.depth ASC,
-    nb_docs DESC
-
----
-
-kind: tool
 name: sorbobot-get-domains-by-uid
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -1116,6 +1073,3 @@ tools:
   - sorbobot-get-concept-hierarchy
   - sorbobot-top-researchers-by-publications
   - sorbobot-top-journals-by-articles
-  - sorbobot-get-domains-by-paths
-  - sorbobot-get-domains-by-paths
-  - sorbobot-search-person-by-name-fuzzy
