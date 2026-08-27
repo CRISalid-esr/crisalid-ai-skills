@@ -320,63 +320,63 @@ MERGE (ru3)-[:HAS_SHORT_LABEL]->(ru3_sl)
 // — for testing the sorbobot-* domain/expert tools.
 // ============================================================================
 
-CREATE (:Concept:Domain {uid: 'https://openalex.org/domains/3', uri: 'https://openalex.org/domains/3'})
-CREATE (:Concept:Field {uid: 'https://openalex.org/fields/17', uri: 'https://openalex.org/fields/17'})
-CREATE (:Concept:SubField {uid: 'https://openalex.org/subfields/1702', uri: 'https://openalex.org/subfields/1702'})
-CREATE (:Concept:Topic {uid: 'https://openalex.org/T11010', uri: 'https://openalex.org/T11010'})
+CREATE (:Concept:Domain {uid: 'https://openalex.org/domains/3', uri: 'https://openalex.org/domains/3'});
+CREATE (:Concept:Field {uid: 'https://openalex.org/fields/17', uri: 'https://openalex.org/fields/17'});
+CREATE (:Concept:SubField {uid: 'https://openalex.org/subfields/1702', uri: 'https://openalex.org/subfields/1702'});
+CREATE (:Concept:Topic {uid: 'https://openalex.org/T11010', uri: 'https://openalex.org/T11010'});
 
-CREATE (:Literal:Embeddable {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'Computer Science', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'study of computation', language: 'en', type: 'concept_definition', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'})
-CREATE (:Literal:Embeddable {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition', embedding_status: 'pending'})
+CREATE (:Literal:Embeddable {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Computer Science', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'study of computation', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
 
-MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'Computer Science', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'study of computation', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l)
-MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l)
+MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'Computer Science', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'study of computation', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
 
-MATCH (child:Concept {uid: 'https://openalex.org/fields/17'}), (parent:Concept {uid: 'https://openalex.org/domains/3'}) MERGE (child)-[:BROADER]->(parent)
-MATCH (child:Concept {uid: 'https://openalex.org/subfields/1702'}), (parent:Concept {uid: 'https://openalex.org/fields/17'}) MERGE (child)-[:BROADER]->(parent)
-MATCH (child:Concept {uid: 'https://openalex.org/T11010'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent)
+MATCH (child:Concept {uid: 'https://openalex.org/fields/17'}), (parent:Concept {uid: 'https://openalex.org/domains/3'}) MERGE (child)-[:BROADER]->(parent);
+MATCH (child:Concept {uid: 'https://openalex.org/subfields/1702'}), (parent:Concept {uid: 'https://openalex.org/fields/17'}) MERGE (child)-[:BROADER]->(parent);
+MATCH (child:Concept {uid: 'https://openalex.org/T11010'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent);
 
 // --- Internal researcher with two publications tagged Artificial Intelligence ---
-CREATE (:Person {uid: 'test-person-jdurand', display_name: 'Jeannette Durand', display_name_variants: ['J. Durand'], external: false})
+CREATE (:Person {uid: 'test-person-jdurand', display_name: 'Jeannette Durand', display_name_variants: ['J. Durand'], external: false});
 
-CREATE (:Document:JournalArticle {uid: 'test-doc-1', document_type: 'JournalArticle', publication_date: '2020-01-15'})
-CREATE (:Literal {language: 'en', value: 'Active Learning Strategies for Knowledge Graphs', type: 'document_title'})
-MATCH (d:Document {uid: 'test-doc-1'}), (t:Literal {value: 'Active Learning Strategies for Knowledge Graphs'}) MERGE (d)-[:HAS_TITLE]->(t)
+CREATE (:Document:JournalArticle {uid: 'test-doc-1', document_type: 'JournalArticle', publication_date: '2020-01-15'});
+CREATE (:Literal {language: 'en', value: 'Active Learning Strategies for Knowledge Graphs', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-1'}), (t:Literal {value: 'Active Learning Strategies for Knowledge Graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
 
-CREATE (:Contribution {uid: 'test-contrib-1', roles: ['AUTHOR', 'http://id.loc.gov/vocabulary/relators/aut']})
-MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c)
-MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c)
-MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t)
+CREATE (:Contribution {uid: 'test-contrib-1', roles: ['AUTHOR', 'http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t);
 
 
-CREATE (:Document:JournalArticle {uid: 'test-doc-1-dup', document_type: 'JournalArticle', publication_date: '2020-01-15'})
-CREATE (:Literal {language: 'en', value: 'active learning strategies for knowledge graphs', type: 'document_title'})
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Literal {value: 'active learning strategies for knowledge graphs'}) MERGE (d)-[:HAS_TITLE]->(t)
+CREATE (:Document:JournalArticle {uid: 'test-doc-1-dup', document_type: 'JournalArticle', publication_date: '2020-01-15'});
+CREATE (:Literal {language: 'en', value: 'active learning strategies for knowledge graphs', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Literal {value: 'active learning strategies for knowledge graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
 
-CREATE (:Contribution {uid: 'test-contrib-1-dup', roles: ['AUTHOR']})
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c)
-MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c)
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t)
+CREATE (:Contribution {uid: 'test-contrib-1-dup', roles: ['AUTHOR']});
+MATCH (d:Document {uid: 'test-doc-1-dup'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t);
 
 // --- Second internal researcher, co-author (thesis director) on doc1 — for list-domain-experts ---
-CREATE (:Person {uid: 'test-person-mlefevre', display_name: 'Marc Lefevre', display_name_variants: [], external: false})
-CREATE (:Contribution {uid: 'test-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths']})
-MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c)
-MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c)
+CREATE (:Person {uid: 'test-person-mlefevre', display_name: 'Marc Lefevre', display_name_variants: [], external: false});
+CREATE (:Contribution {uid: 'test-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
 
 // --- External co-author ---
-CREATE (:Person {uid: 'test-person-external', display_name: 'External Researcher', display_name_variants: [], external: true})
-CREATE (:Contribution {uid: 'test-contrib-3', roles: ['http://id.loc.gov/vocabulary/relators/aut']})
-MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c)
-MATCH (p:Person {uid: 'test-person-external'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c)
+CREATE (:Person {uid: 'test-person-external', display_name: 'External Researcher', display_name_variants: [], external: true});
+CREATE (:Contribution {uid: 'test-contrib-3', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-external'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);

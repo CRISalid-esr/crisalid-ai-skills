@@ -3,15 +3,9 @@ import socket  # noqa: F401 used in toolbox_url fixture
 
 import pytest
 import pytest_asyncio
-import toolbox_core.protocol as _tc_protocol
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from toolbox_langchain import ToolboxClient
-
-# toolbox server serialises float parameters as JSON Schema "number";
-# the client type map only has "float" — add the alias so float array
-# parameters (e.g. embedding vectors) load without ValueError.
-_tc_protocol.__TYPE_MAP["number"] = float  # type: ignore[attr-defined]
 
 load_dotenv("mcp-toolbox/.env.test", override=True)
 

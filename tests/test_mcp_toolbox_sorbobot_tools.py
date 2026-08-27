@@ -39,8 +39,14 @@ async def _load_tool(toolbox_client, name: str):
 
 
 def _parse(result):
-    """Decode a tool result that may come back as a JSON string or already parsed."""
-    return json.loads(result) if isinstance(result, str) else result
+    """Decode a tool result that may come back as a JSON string or already parsed.
+
+    The toolbox returns JSON `null` — not `[]` — when a query matches zero rows.
+    Normalise it exactly as `McpToolboxClient.call` does in production, so the
+    tests assert against the shape the agent actually receives.
+    """
+    parsed = json.loads(result) if isinstance(result, str) else result
+    return [] if parsed is None else parsed
 
 
 # ── sorbobot-get-concept-hierarchy ──────────────────────────────────────────
