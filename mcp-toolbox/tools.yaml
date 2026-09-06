@@ -578,6 +578,10 @@ parameters:
     type: boolean
     description: If true, search abstracts in addition to titles and include them in results
     default: false
+  - name: internal_only
+    type: boolean
+    description: If true, keep only documents with at least one contributor from the institution's own directory (Person.external = false) and return only those contributors
+    default: false
 statement: |
   CALL db.index.vector.queryNodes('embeddable_embedding', toInteger($limit) * 100, $semantic_theme_vector)
   YIELD node AS literal, score
@@ -587,6 +591,8 @@ statement: |
       ELSE ['document_title'] END)
   MATCH (doc:Document)-[:HAS_TITLE|HAS_ABSTRACT]->(literal)
   WITH doc, max(score) AS best_score
+  WHERE $internal_only = false
+    OR EXISTS { MATCH (doc)-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(:Person {external: false}) }
   ORDER BY best_score DESC
   LIMIT $limit
   CALL {
@@ -602,6 +608,7 @@ statement: |
   CALL {
     WITH doc
     OPTIONAL MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(contributor:Person)
+    WHERE $internal_only = false OR contributor.external = false
     RETURN collect(DISTINCT CASE WHEN contributor IS NOT NULL THEN {
       uid: contributor.uid,
       name: contributor.display_name,
@@ -611,6 +618,7 @@ statement: |
   }
   RETURN doc.uid AS uid,
          best_score AS score,
+         doc.publication_date AS publication_date,
          titles,
          CASE WHEN $use_abstract THEN all_abstracts ELSE null END AS abstracts,
          contributors

@@ -74,3 +74,33 @@ async def test_results_ordered_by_score_descending(semantic_search_tool):
     data = json.loads(result) if isinstance(result, str) else result
     scores = [row["score"] for row in data]
     assert scores == sorted(scores, reverse=True)
+
+
+@pytest.mark.asyncio
+async def test_results_include_publication_date(semantic_search_tool):
+    result = await semantic_search_tool.ainvoke({"semantic_theme": "dust in the warm ionized medium", "semantic_theme_vector": TITLE_VECTOR, "limit": 10})
+    data = json.loads(result) if isinstance(result, str) else result
+    for row in data:
+        assert "publication_date" in row
+
+
+@pytest.mark.asyncio
+async def test_internal_only_keeps_internal_contributors_only(semantic_search_tool):
+    result = await semantic_search_tool.ainvoke({"semantic_theme": "dust in the warm ionized medium", "semantic_theme_vector": TITLE_VECTOR, "limit": 10, "internal_only": True})
+    data = json.loads(result) if isinstance(result, str) else result
+    assert data, "internal_only should keep documents with an internal contributor"
+    for row in data:
+        assert row["contributors"], row["uid"]
+        assert all(c["external"] is False for c in row["contributors"]), row["uid"]
+
+
+@pytest.mark.asyncio
+async def test_internal_only_false_keeps_every_contributor(semantic_search_tool):
+    strict = await semantic_search_tool.ainvoke({"semantic_theme": "dust in the warm ionized medium", "semantic_theme_vector": TITLE_VECTOR, "limit": 10, "internal_only": True})
+    loose = await semantic_search_tool.ainvoke({"semantic_theme": "dust in the warm ionized medium", "semantic_theme_vector": TITLE_VECTOR, "limit": 10, "internal_only": False})
+    strict_data = json.loads(strict) if isinstance(strict, str) else strict
+    loose_data = json.loads(loose) if isinstance(loose, str) else loose
+    assert {row["uid"] for row in strict_data} <= {row["uid"] for row in loose_data}
+    strict_doc = next(row for row in strict_data if row["uid"] == DOC_UID)
+    loose_doc = next(row for row in loose_data if row["uid"] == DOC_UID)
+    assert len(loose_doc["contributors"]) >= len(strict_doc["contributors"])
