@@ -26,8 +26,7 @@ The MCP toolbox provides multiple **named toolsets** to control which tools are 
 |---|---|---|
 | `crisalid-restricted` | Curated CRISalid tools, no raw Cypher | `get-crisalid-schema`, `list-person-publications`, `list-person-concepts`, `search-person-by-name` |
 | `crisalid-unrestricted` | Unrestricted CRISalid access | above + `execute-cypher-readonly` |
-| `sorbobot-restricted` | SorboBot domain analysis tools, no raw Cypher | `sorbobot-search-domains`, `sorbobot-get-domain-authors`, `sorbobot-get-parent-domains`, `sorbobot-get-person-expertise` |
-| `sorbobot-full` | Unrestricted SorboBot access | above + `sorbobot-execute-cypher-readonly` |
+| `sorbobot` | The subset SorboBot calls by name from Python | the four concept tools + `search-person-by-name` |
 
 **Why multiple toolsets?**
 - **Separation of concerns**: CRISalid tools (persons, publications, concepts) vs. SorboBot tools (domain/expertise hierarchy)
@@ -42,11 +41,11 @@ SorboBot provides specialized tools for navigating domain and expertise hierarch
 
 | Tool | Purpose | Parameters |
 |---|---|---|
-| `sorbobot-search-domains` | Find domains by keyword with semantic similarity | `keyword` (str), `limit` (int), `similarity_threshold` (float, 0.0–1.0) |
-| `sorbobot-get-domain-authors` | List researchers working in a domain | `domain` (str), `limit` (int) |
-| `sorbobot-get-parent-domains` | Navigate domain hierarchy upward | `domain` (str) |
-| `sorbobot-get-person-expertise` | List domains where a person has published | `person_name` (str), `limit` (int) |
-| `sorbobot-execute-cypher-readonly` | Direct Cypher query access (unrestricted only) | `query` (str), `params` (dict) |
+| `get-concepts-by-uid` | Look up OpenAlex concepts by uid, with document counts | `uids` (comma-separated str), `similarity_threshold` (float) |
+| `get-concept-hierarchy` | Ancestor chain of a concept, Domain first | `uids` (comma-separated str) |
+| `list-concept-experts` | Internal researchers publishing on given concepts | `uids` (comma-separated str) |
+| `list-person-research-concepts` | Taxonomy concepts a person publishes on | `person_uid` (str) |
+| `execute-cypher-readonly` | Direct Cypher query access (unrestricted only) | `query` (str), `params` (dict) |
 
 ### Use Cases
 
@@ -59,18 +58,17 @@ SorboBot provides specialized tools for navigating domain and expertise hierarch
 ```python
 from toolbox_langchain import aload_toolset
 
-# Load the restricted SorboBot toolset (no raw Cypher)
-toolset = await aload_toolset('sorbobot-restricted', client=toolbox_client)
+# Load the SorboBot toolset (no raw Cypher)
+toolset = await aload_toolset('sorbobot', client=toolbox_client)
 
 # Invoke tools
-domains = await toolset.tools['sorbobot-search-domains'].ainvoke({
-    'keyword': 'machine learning',
-    'limit': 5,
-    'similarity_threshold': 0.7
+concepts = await toolset.tools['get-concepts-by-uid'].ainvoke({
+    'uids': 'https://openalex.org/T11010',
+    'similarity_threshold': 0.53
 })
 
-# Or load the full toolset to access execute-cypher-readonly
-full_toolset = await aload_toolset('sorbobot-full', client=toolbox_client)
+# Or load the unrestricted toolset to access execute-cypher-readonly
+full_toolset = await aload_toolset('crisalid-unrestricted', client=toolbox_client)
 ```
 
 See `samples/` for complete examples.

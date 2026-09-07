@@ -49,12 +49,12 @@ def _parse(result):
     return [] if parsed is None else parsed
 
 
-# ── sorbobot-get-concept-hierarchy ──────────────────────────────────────────
+# ── get-concept-hierarchy ──────────────────────────────────────────
 
 
 @pytest.fixture
 async def concept_hierarchy_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-get-concept-hierarchy")
+    return await _load_tool(toolbox_client, "get-concept-hierarchy")
 
 
 @pytest.mark.asyncio
@@ -100,17 +100,17 @@ async def test_get_concept_hierarchy_leaf_has_no_descendants_beyond_itself(
     assert {row["ancestor_uid"] for row in data} == {DOMAIN_UID}
 
 
-# ── sorbobot-get-domains-by-uid ─────────────────────────────────────────────
+# ── get-concepts-by-uid ─────────────────────────────────────────────
 
 
 @pytest.fixture
-async def domains_by_uid_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-get-domains-by-uid")
+async def concepts_by_uid_tool(toolbox_client):
+    return await _load_tool(toolbox_client, "get-concepts-by-uid")
 
 
 @pytest.mark.asyncio
-async def test_get_domains_by_uid_returns_name_type_description(domains_by_uid_tool):
-    result = await domains_by_uid_tool.ainvoke({"uids": TOPIC_UID})
+async def test_get_concepts_by_uid_returns_name_type_description(concepts_by_uid_tool):
+    result = await concepts_by_uid_tool.ainvoke({"uids": TOPIC_UID})
     data = _parse(result)
     assert len(data) == 1
     assert data[0]["uid"] == TOPIC_UID
@@ -120,25 +120,25 @@ async def test_get_domains_by_uid_returns_name_type_description(domains_by_uid_t
 
 
 @pytest.mark.asyncio
-async def test_get_domains_by_uid_counts_docs_on_topic(domains_by_uid_tool):
+async def test_get_concepts_by_uid_counts_docs_on_topic(concepts_by_uid_tool):
     """Both test-doc-1 and test-doc-1-dup are tagged HAS_TOPIC on the Topic node."""
-    result = await domains_by_uid_tool.ainvoke({"uids": TOPIC_UID})
+    result = await concepts_by_uid_tool.ainvoke({"uids": TOPIC_UID})
     data = _parse(result)
     assert data[0]["nb_docs"] == 2
 
 
 @pytest.mark.asyncio
-async def test_get_domains_by_uid_aggregates_subtree_docs_from_domain(domains_by_uid_tool):
+async def test_get_concepts_by_uid_aggregates_subtree_docs_from_domain(concepts_by_uid_tool):
     """Querying the top Domain rolls up docs tagged on its descendant Topic."""
-    result = await domains_by_uid_tool.ainvoke({"uids": DOMAIN_UID})
+    result = await concepts_by_uid_tool.ainvoke({"uids": DOMAIN_UID})
     data = _parse(result)
     assert data[0]["nb_docs"] == 2
 
 
 @pytest.mark.asyncio
-async def test_get_domains_by_uid_similarity_threshold_excludes_docs(domains_by_uid_tool):
+async def test_get_concepts_by_uid_similarity_threshold_excludes_docs(concepts_by_uid_tool):
     """Both HAS_TOPIC edges have similarity=0.85 — a higher threshold excludes them."""
-    result = await domains_by_uid_tool.ainvoke(
+    result = await concepts_by_uid_tool.ainvoke(
         {"uids": TOPIC_UID, "similarity_threshold": 0.9}
     )
     data = _parse(result)
@@ -146,80 +146,23 @@ async def test_get_domains_by_uid_similarity_threshold_excludes_docs(domains_by_
 
 
 @pytest.mark.asyncio
-async def test_get_domains_by_uid_multiple_uids(domains_by_uid_tool):
-    result = await domains_by_uid_tool.ainvoke({"uids": f"{DOMAIN_UID},{TOPIC_UID}"})
+async def test_get_concepts_by_uid_multiple_uids(concepts_by_uid_tool):
+    result = await concepts_by_uid_tool.ainvoke({"uids": f"{DOMAIN_UID},{TOPIC_UID}"})
     data = _parse(result)
     assert {row["uid"] for row in data} == {DOMAIN_UID, TOPIC_UID}
 
 
-# ── sorbobot-get-child-domains / sorbobot-get-parent-domains ────────────────
+# ── list-concept-experts ────────────────────────────────────────────
 
 
 @pytest.fixture
-async def child_domains_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-get-child-domains")
-
-
-@pytest.fixture
-async def parent_domains_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-get-parent-domains")
+async def concept_experts_tool(toolbox_client):
+    return await _load_tool(toolbox_client, "list-concept-experts")
 
 
 @pytest.mark.asyncio
-async def test_get_child_domains_direct_child(child_domains_tool):
-    result = await child_domains_tool.ainvoke({"uids": DOMAIN_UID, "depth_delta": 1})
-    data = _parse(result)
-    assert {row["uid"] for row in data} == {FIELD_UID}
-    assert data[0]["type"] == "Field"
-
-
-@pytest.mark.asyncio
-async def test_get_child_domains_three_levels_down(child_domains_tool):
-    result = await child_domains_tool.ainvoke({"uids": DOMAIN_UID, "depth_delta": 3})
-    data = _parse(result)
-    assert {row["uid"] for row in data} == {TOPIC_UID}
-
-
-@pytest.mark.asyncio
-async def test_get_child_domains_leaf_has_no_children(child_domains_tool):
-    result = await child_domains_tool.ainvoke({"uids": TOPIC_UID, "depth_delta": 1})
-    data = _parse(result)
-    assert data == []
-
-
-@pytest.mark.asyncio
-async def test_get_parent_domains_direct_parent(parent_domains_tool):
-    result = await parent_domains_tool.ainvoke({"uids": TOPIC_UID, "depth_delta": 1})
-    data = _parse(result)
-    assert {row["uid"] for row in data} == {SUBFIELD_UID}
-    assert data[0]["type"] == "SubField"
-
-
-@pytest.mark.asyncio
-async def test_get_parent_domains_three_levels_up(parent_domains_tool):
-    result = await parent_domains_tool.ainvoke({"uids": TOPIC_UID, "depth_delta": 3})
-    data = _parse(result)
-    assert {row["uid"] for row in data} == {DOMAIN_UID}
-
-
-@pytest.mark.asyncio
-async def test_get_parent_domains_root_has_no_parent(parent_domains_tool):
-    result = await parent_domains_tool.ainvoke({"uids": DOMAIN_UID, "depth_delta": 1})
-    data = _parse(result)
-    assert data == []
-
-
-# ── sorbobot-list-domain-experts ────────────────────────────────────────────
-
-
-@pytest.fixture
-async def domain_experts_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-list-domain-experts")
-
-
-@pytest.mark.asyncio
-async def test_list_domain_experts_includes_author_and_thesis_director(domain_experts_tool):
-    result = await domain_experts_tool.ainvoke({"uids": TOPIC_UID})
+async def test_list_concept_experts_includes_author_and_thesis_director(concept_experts_tool):
+    result = await concept_experts_tool.ainvoke({"uids": TOPIC_UID})
     data = _parse(result)
     uids = {a["person_uid"] for a in data}
     assert PERSON_JDURAND in uids
@@ -227,79 +170,79 @@ async def test_list_domain_experts_includes_author_and_thesis_director(domain_ex
 
 
 @pytest.mark.asyncio
-async def test_list_domain_experts_excludes_external_person(domain_experts_tool):
-    result = await domain_experts_tool.ainvoke({"uids": TOPIC_UID})
+async def test_list_concept_experts_excludes_external_person(concept_experts_tool):
+    result = await concept_experts_tool.ainvoke({"uids": TOPIC_UID})
     data = _parse(result)
     uids = {a["person_uid"] for a in data}
     assert PERSON_EXTERNAL not in uids
 
 
 @pytest.mark.asyncio
-async def test_list_domain_experts_excludes_dup_with_plain_author_role(domain_experts_tool):
+async def test_list_concept_experts_excludes_dup_with_plain_author_role(concept_experts_tool):
     """test-doc-1-dup's contribution role is a plain 'AUTHOR' string, not a LOC
     relator URI, so it must not count toward Jeannette Durand's nb_publications
-    here (contrast with sorbobot-list-person-research-domains, which has no
+    here (contrast with list-person-research-concepts, which has no
     role filter and does dedupe test-doc-1 / test-doc-1-dup by title+date)."""
-    result = await domain_experts_tool.ainvoke({"uids": TOPIC_UID})
+    result = await concept_experts_tool.ainvoke({"uids": TOPIC_UID})
     data = _parse(result)
     jdurand = next(a for a in data if a["person_uid"] == PERSON_JDURAND)
     assert jdurand["nb_publications"] == 1
 
 
 @pytest.mark.asyncio
-async def test_list_domain_experts_searching_from_domain_reaches_topic_docs(
-    domain_experts_tool,
+async def test_list_concept_experts_searching_from_domain_reaches_topic_docs(
+    concept_experts_tool,
 ):
     """Querying at the top Domain level must still surface experts tagged at
     the descendant Topic level."""
-    result = await domain_experts_tool.ainvoke({"uids": DOMAIN_UID})
+    result = await concept_experts_tool.ainvoke({"uids": DOMAIN_UID})
     data = _parse(result)
     uids = {a["person_uid"] for a in data}
     assert PERSON_JDURAND in uids
 
 
 @pytest.mark.asyncio
-async def test_list_domain_experts_unknown_uid_returns_empty(domain_experts_tool):
-    result = await domain_experts_tool.ainvoke({"uids": "https://openalex.org/T99999"})
+async def test_list_concept_experts_unknown_uid_returns_empty(concept_experts_tool):
+    result = await concept_experts_tool.ainvoke({"uids": "https://openalex.org/T99999"})
     data = _parse(result)
     assert data == []
 
 
-# ── sorbobot-list-person-research-domains ───────────────────────────────────
+# ── list-person-research-concepts ───────────────────────────────────
 
 
 @pytest.fixture
-async def person_research_domains_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-list-person-research-domains")
+async def person_research_concepts_tool(toolbox_client):
+    return await _load_tool(toolbox_client, "list-person-research-concepts")
 
 
 @pytest.mark.asyncio
-async def test_list_person_research_domains_returns_topic(person_research_domains_tool):
-    result = await person_research_domains_tool.ainvoke({"person_uid": PERSON_JDURAND})
+async def test_list_person_research_concepts_returns_topic(person_research_concepts_tool):
+    result = await person_research_concepts_tool.ainvoke({"person_uid": PERSON_JDURAND})
     data = _parse(result)
     assert any(row["domain_uid"] == TOPIC_UID for row in data)
 
 
 @pytest.mark.asyncio
-async def test_list_person_research_domains_dedupes_harvested_duplicate(
-    person_research_domains_tool,
+async def test_list_person_research_concepts_dedupes_harvested_duplicate(
+    person_research_concepts_tool,
 ):
     """test-doc-1 and test-doc-1-dup are the same article (same normalised
     title + publication_date, harvested twice) and must count as a single
     publication, not two."""
-    result = await person_research_domains_tool.ainvoke({"person_uid": PERSON_JDURAND})
+    result = await person_research_concepts_tool.ainvoke({"person_uid": PERSON_JDURAND})
     data = _parse(result)
     row = next(r for r in data if r["domain_uid"] == TOPIC_UID)
     assert row["nb_publications"] == 1
 
 
 @pytest.mark.asyncio
-async def test_list_person_research_domains_min_depth_excludes_domain_level(
-    person_research_domains_tool,
+async def test_list_person_research_concepts_min_depth_excludes_domain_level(
+    person_research_concepts_tool,
 ):
     """min_depth defaults to 2 (Domain), so a Topic-level (depth 5) result is
     included by default; raising min_depth above 5 must exclude it."""
-    result = await person_research_domains_tool.ainvoke(
+    result = await person_research_concepts_tool.ainvoke(
         {"person_uid": PERSON_JDURAND, "min_depth": 6}
     )
     data = _parse(result)
@@ -307,139 +250,22 @@ async def test_list_person_research_domains_min_depth_excludes_domain_level(
 
 
 @pytest.mark.asyncio
-async def test_list_person_research_domains_unknown_person_returns_empty(
-    person_research_domains_tool,
+async def test_list_person_research_concepts_unknown_person_returns_empty(
+    person_research_concepts_tool,
 ):
-    result = await person_research_domains_tool.ainvoke({"person_uid": "no-such-person"})
+    result = await person_research_concepts_tool.ainvoke({"person_uid": "no-such-person"})
     data = _parse(result)
     assert data == []
 
 
 @pytest.mark.asyncio
-async def test_list_person_research_domains_external_person_excluded(
-    person_research_domains_tool,
+async def test_list_person_research_concepts_external_person_excluded(
+    person_research_concepts_tool,
 ):
     """The tool's MATCH filters on Person.external = false — an external uid
     should never resolve to any row."""
-    result = await person_research_domains_tool.ainvoke({"person_uid": PERSON_EXTERNAL})
+    result = await person_research_concepts_tool.ainvoke({"person_uid": PERSON_EXTERNAL})
     data = _parse(result)
     assert data == []
 
 
-# ── sorbobot-search-person-by-name-fuzzy ────────────────────────────────────
-
-
-@pytest.fixture
-async def person_fuzzy_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-search-person-by-name-fuzzy")
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_matches_last_name(person_fuzzy_tool):
-    result = await person_fuzzy_tool.ainvoke({"name": "Martin"})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert PERSON_LOCAL_JMARTIN in uids
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_case_insensitive(person_fuzzy_tool):
-    result = await person_fuzzy_tool.ainvoke({"name": "martin"})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert PERSON_LOCAL_JMARTIN in uids
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_full_name(person_fuzzy_tool):
-    result = await person_fuzzy_tool.ainvoke({"name": "Jean Martin"})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert PERSON_LOCAL_JMARTIN in uids
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_excludes_external(person_fuzzy_tool):
-    result = await person_fuzzy_tool.ainvoke({"name": "External Researcher"})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert PERSON_EXTERNAL not in uids
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_ignores_short_words(person_fuzzy_tool):
-    """Words of length <= 2 are dropped from the search — a 2-letter query
-    alone should not blow up or match everyone."""
-    result = await person_fuzzy_tool.ainvoke({"name": "Jo"})
-    data = _parse(result)
-    assert data == []
-
-
-@pytest.mark.asyncio
-async def test_search_person_by_name_fuzzy_respects_max_results(person_fuzzy_tool):
-    result = await person_fuzzy_tool.ainvoke({"name": "Durand", "max_results": 1})
-    data = _parse(result)
-    assert len(data) <= 1
-
-
-# ── sorbobot-top-researchers-by-publications ────────────────────────────────
-
-
-@pytest.fixture
-async def top_researchers_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-top-researchers-by-publications")
-
-
-@pytest.mark.asyncio
-async def test_top_researchers_by_publications_includes_known_authors(top_researchers_tool):
-    result = await top_researchers_tool.ainvoke({"limit": 50})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert PERSON_LOCAL_JDURAND in uids
-    assert PERSON_LOCAL_JMARTIN in uids
-
-
-@pytest.mark.asyncio
-async def test_top_researchers_by_publications_respects_limit(top_researchers_tool):
-    result = await top_researchers_tool.ainvoke({"limit": 1})
-    data = _parse(result)
-    assert len(data) <= 1
-
-
-@pytest.mark.asyncio
-async def test_top_researchers_by_publications_sorted_descending(top_researchers_tool):
-    result = await top_researchers_tool.ainvoke({"limit": 50})
-    data = _parse(result)
-    counts = [row["nb_publications"] for row in data]
-    assert counts == sorted(counts, reverse=True)
-
-
-# ── sorbobot-top-journals-by-articles ───────────────────────────────────────
-
-
-@pytest.fixture
-async def top_journals_tool(toolbox_client):
-    return await _load_tool(toolbox_client, "sorbobot-top-journals-by-articles")
-
-
-@pytest.mark.asyncio
-async def test_top_journals_by_articles_includes_known_journal(top_journals_tool):
-    result = await top_journals_tool.ainvoke({"limit": 50})
-    data = _parse(result)
-    uids = {row["uid"] for row in data}
-    assert "journal-0004-637X" in uids
-
-
-@pytest.mark.asyncio
-async def test_top_journals_by_articles_article_count(top_journals_tool):
-    result = await top_journals_tool.ainvoke({"limit": 50})
-    data = _parse(result)
-    row = next(r for r in data if r["uid"] == "journal-0004-637X")
-    assert row["nb_articles"] == 1
-
-
-@pytest.mark.asyncio
-async def test_top_journals_by_articles_respects_limit(top_journals_tool):
-    result = await top_journals_tool.ainvoke({"limit": 1})
-    data = _parse(result)
-    assert len(data) <= 1

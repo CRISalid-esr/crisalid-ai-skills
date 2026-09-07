@@ -17,19 +17,16 @@ Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/m
 
 ### SorboBot Tools
 
-SorboBot provides specialized tools for domain analysis and researcher expertise queries:
+Four tools navigate the OpenAlex concept taxonomy. They carry no agent prefix:
+SorboBot drives them today, but nothing about them is SorboBot-specific, so
+they belong to the general toolsets too.
 
-| Toolset | Tools | Use case |
-|---|---|---|
-| `sorbobot-restricted` | `sorbobot-search-domains`, `sorbobot-get-domain-authors`, `sorbobot-get-parent-domains`, `sorbobot-get-person-expertise` | Domain research and expertise discovery |
-| `sorbobot-full` | All restricted tools + `sorbobot-execute-cypher-readonly` | Advanced domain analysis with ad-hoc Cypher access |
-
-**SorboBot tool descriptions:**
-- `sorbobot-search-domains` — Find research domains by keyword with publication weighting
-- `sorbobot-get-domain-authors` — Discover researchers working in specific domains
-- `sorbobot-get-parent-domains` — Navigate domain hierarchy to broaden/narrow scope
-- `sorbobot-get-person-expertise` — Find research domains for a specific researcher
-- `sorbobot-execute-cypher-readonly` — Execute read-only Cypher queries for advanced analysis
+| Tool | Use case |
+|---|---|
+| `get-concepts-by-uid` | Look up concepts by OpenAlex uid, with their document counts |
+| `get-concept-hierarchy` | Walk a concept's ancestor chain, Domain down to the concept itself |
+| `list-concept-experts` | List internal researchers publishing on given concepts |
+| `list-person-research-concepts` | List the taxonomy concepts a person publishes on |
 
 ### Run the MCP server
 
@@ -242,9 +239,9 @@ npx @toolbox-sdk/server --config tools.yaml
 # or: ./toolbox --config tools.yaml  (if using the downloaded binary)
 ```
 
-The server loads all four toolsets automatically:
+The server loads all three toolsets automatically:
 - `crisalid-restricted` and `crisalid-unrestricted` — CRISalid tools
-- `sorbobot-restricted` and `sorbobot-full` — SorboBot tools
+- `sorbobot` — the subset SorboBot calls
 
 **3. Run the test suite**
 

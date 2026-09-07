@@ -259,33 +259,6 @@ statement: |
 ---
 
 kind: tool
-name: sorbobot-search-person-by-name-fuzzy
-type: neo4j-cypher
-source: crisalid-neo4j
-description: |
-  Fallback fuzzy search for an internal person by display name, for use when
-  the person_fulltext_name index is unavailable.
-parameters:
-  - name: name
-    type: string
-    description: Name to search for — first name, last name, or both, in any order
-  - name: max_results
-    type: integer
-    description: Maximum number of candidates to return
-    default: 50
-statement: |
-  WITH [w IN split($name, ' ') WHERE size(w) > 2] AS words
-  MATCH (person:Person)
-  WHERE person.external = false
-    AND person.display_name IS NOT NULL
-    AND size(person.display_name) > 3
-    AND ANY(word IN words WHERE toLower(person.display_name) CONTAINS toLower(word))
-  RETURN DISTINCT person.uid AS uid, person.display_name AS display_name, person.external AS external
-  LIMIT $max_results
-
----
-
-kind: tool
 name: list-person-collaborators
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -646,7 +619,7 @@ statement: |
 ---
 
 kind: tool
-name: sorbobot-get-domains-by-uid
+name: get-concepts-by-uid
 type: neo4j-cypher
 source: crisalid-neo4j
 description: |
@@ -696,77 +669,7 @@ statement: |
 ---
 
 kind: tool
-name: sorbobot-get-child-domains
-type: neo4j-cypher
-source: crisalid-neo4j
-description: |
-  Return the descendant Concept nodes (OpenAlex taxonomy) located depth_delta
-  levels below each given Concept (uid), via BROADER relationships (traversed
-  from child to parent, so descendants are found by following incoming
-  BROADER edges). depth_delta is enforced on the BROADER path length itself —
-  Concept nodes carry no stored depth property.
-parameters:
-  - name: uids
-    type: string
-    description: Comma-separated list of parent Concept.uid values
-  - name: depth_delta
-    type: integer
-    description: Number of levels below the parent to descend (1 = direct children)
-    default: 1
-statement: |
-  WITH split($uids, ',') AS uid_list
-  UNWIND uid_list AS raw_uid
-  WITH trim(raw_uid) AS parent_uid
-  MATCH (parent:Concept {uid: parent_uid})
-  MATCH path = (parent)<-[:BROADER*1..5]-(child:Concept)
-  WHERE length(path) = $depth_delta
-  WITH DISTINCT child
-  OPTIONAL MATCH (child)-[:HAS_PREF_LABEL]->(pref:Literal)
-  RETURN child.uid AS uid,
-         head(collect(DISTINCT pref.value)) AS name,
-         [lbl IN labels(child) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
-  ORDER BY name
-
----
-
-kind: tool
-name: sorbobot-get-parent-domains
-type: neo4j-cypher
-source: crisalid-neo4j
-description: |
-  Return the ancestor Concept nodes (OpenAlex taxonomy) located depth_delta
-  levels above each given Concept (uid), via BROADER relationships.
-  depth_delta is enforced on the BROADER path length itself — Concept nodes
-  carry no stored depth property.
-parameters:
-  - name: uids
-    type: string
-    description: Comma-separated list of child Concept.uid values
-  - name: depth_delta
-    type: integer
-    description: Number of levels above the child to ascend (1 = direct parent)
-    default: 1
-statement: |
-  WITH split($uids, ',') AS uid_list
-  UNWIND uid_list AS raw_uid
-  WITH trim(raw_uid) AS child_uid
-  MATCH (child:Concept {uid: child_uid})
-  MATCH path = (child)-[:BROADER*1..5]->(parent:Concept)
-  WHERE length(path) = $depth_delta
-  WITH DISTINCT parent
-  OPTIONAL MATCH (parent)-[:HAS_PREF_LABEL]->(pref:Literal)
-  WITH parent,
-       head(collect(DISTINCT pref.value)) AS name,
-       [lbl IN labels(parent) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
-  WITH parent, name, type,
-       CASE type WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3 END AS depth_rank
-  RETURN parent.uid AS uid, name, type
-  ORDER BY depth_rank DESC
-
----
-
-kind: tool
-name: sorbobot-list-domain-experts
+name: list-concept-experts
 type: neo4j-cypher
 source: crisalid-neo4j
 description: |
@@ -838,7 +741,7 @@ statement: |
 ---
 
 kind: tool
-name: sorbobot-list-person-research-domains
+name: list-person-research-concepts
 type: neo4j-cypher
 source: crisalid-neo4j
 description: |
@@ -889,7 +792,7 @@ statement: |
 ---
 
 kind: tool
-name: sorbobot-get-concept-hierarchy
+name: get-concept-hierarchy
 type: neo4j-cypher
 source: crisalid-neo4j
 description: |
@@ -918,56 +821,6 @@ statement: |
 
 ---
 
-kind: tool
-name: sorbobot-top-researchers-by-publications
-type: neo4j-cypher
-source: crisalid-neo4j
-description: |
-  Rank internal researchers (external: false) by number of distinct
-  publications (Document nodes), most published first. Use this instead of
-  execute-cypher-readonly for "top N researchers by publication count"
-  questions — counting via a pattern expression inside count() is invalid
-  Cypher and a common source of failed ad-hoc queries.
-parameters:
-  - name: limit
-    type: integer
-    description: Maximum number of researchers to return
-    default: 10
-statement: |
-  MATCH (p:Person)-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
-  WHERE p.external = false
-  WITH p, count(DISTINCT doc) AS nb_publications
-  ORDER BY nb_publications DESC
-  LIMIT $limit
-  RETURN p.uid AS uid, p.display_name AS display_name, nb_publications
-
----
-
-kind: tool
-name: sorbobot-top-journals-by-articles
-type: neo4j-cypher
-source: crisalid-neo4j
-description: |
-  Rank Journal nodes by number of distinct published articles (Document
-  nodes linked via PUBLISHED_IN), most articles first. Use this instead of
-  execute-cypher-readonly for "which journal published the most articles"
-  questions — do not confuse Journal with the SourceOrganization/
-  AuthorityOrganization institutional affiliations of contributors, which is
-  a completely different relationship chain.
-parameters:
-  - name: limit
-    type: integer
-    description: Maximum number of journals to return
-    default: 10
-statement: |
-  MATCH (doc:Document)-[:PUBLISHED_IN]->(j:Journal)
-  WITH j, count(DISTINCT doc) AS nb_articles
-  ORDER BY nb_articles DESC
-  LIMIT $limit
-  RETURN j.uid AS uid, head(j.titles) AS title, nb_articles
-
----
-
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -985,6 +838,10 @@ tools:
   - search-organization-unit-by-name
   - get-organization-unit-members
   - publications-by-theme
+  - get-concepts-by-uid
+  - get-concept-hierarchy
+  - list-concept-experts
+  - list-person-research-concepts
 
 ---
 
@@ -1006,6 +863,10 @@ tools:
   - get-organization-unit-members
   - publications-by-theme
   - execute-cypher-readonly
+  - get-concepts-by-uid
+  - get-concept-hierarchy
+  - list-concept-experts
+  - list-person-research-concepts
 
 ---
 
@@ -1014,12 +875,8 @@ tools:
 kind: toolset
 name: sorbobot
 tools:
-  - sorbobot-search-person-by-name-fuzzy
-  - sorbobot-get-domains-by-uid
-  - sorbobot-get-child-domains
-  - sorbobot-get-parent-domains
-  - sorbobot-list-domain-experts
-  - sorbobot-list-person-research-domains
-  - sorbobot-get-concept-hierarchy
-  - sorbobot-top-researchers-by-publications
-  - sorbobot-top-journals-by-articles
+  - get-concepts-by-uid
+  - get-concept-hierarchy
+  - list-concept-experts
+  - list-person-research-concepts
+  - search-person-by-name
