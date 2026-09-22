@@ -785,11 +785,16 @@ authRequired:
 description: |
   List the research Concept nodes (OpenAlex taxonomy) most associated with an
   internal person's publications (via HAS_TOPIC), ranked by number of
-  publications.
+  publications. Only authorship contributions count (aut, ths and spk relator
+  roles).
 parameters:
   - name: person_uid
     type: string
     description: Unique identifier of the person (Person.uid)
+  - name: similarity_threshold
+    type: float
+    description: Minimum stored HAS_TOPIC similarity for a publication to count toward a concept
+    default: 0.0
   - name: min_depth
     type: integer
     description: >-
@@ -799,33 +804,124 @@ parameters:
     default: 2
   - name: limit
     type: integer
-    description: Maximum number of domains to return, ranked by publication count
+    description: Maximum number of concepts to return, ranked by publication count
     default: 10
 statement: |
   MATCH (p:Person {uid: $person_uid, external: false})
-  MATCH (p)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
-  MATCH (doc)-[:HAS_TOPIC]->(domain:Concept)
-  WITH p, doc,
-       [lbl IN labels(domain) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type,
-       domain
-  WITH p, doc, domain, domain_type,
-       CASE domain_type WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3 END AS domain_depth
-  WHERE domain_depth >= $min_depth
-  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
-  OPTIONAL MATCH (domain)-[:HAS_PREF_LABEL]->(domain_pref:Literal)
-  WITH p, domain, domain_type, head(collect(DISTINCT domain_pref.value)) AS domain_name,
-       doc, doc.publication_date AS pub_date,
-       head(collect(toLower(trim(title.value)))) AS norm_title
-  WITH p, domain, domain_type, domain_name,
-       CASE WHEN norm_title IS NULL THEN doc.uid
-            ELSE norm_title + '|' + toString(coalesce(pub_date, ''))
-       END AS dedup_key
-  WITH p, domain, domain_type, domain_name, count(DISTINCT dedup_key) AS nb_publications
-  ORDER BY nb_publications DESC
+  MATCH (p)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE ANY(role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ])
+  MATCH (doc)-[link:HAS_TOPIC]->(concept:Concept)
+  WHERE link.similarity >= $similarity_threshold
+  WITH p, concept, count(doc) AS nb_publications
+  WITH p, concept, nb_publications,
+       [lbl IN labels(concept) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type
+  WHERE CASE domain_type
+          WHEN 'Domain' THEN 2 WHEN 'Field' THEN 3 WHEN 'SubField' THEN 4 WHEN 'Topic' THEN 5 ELSE 3
+        END >= $min_depth
+  WITH p, concept, nb_publications, domain_type
+  ORDER BY nb_publications DESC, concept.uid ASC
   LIMIT $limit
-  RETURN p.uid AS uid, p.display_name AS display_name,
-         domain_name AS domain_name, domain.uid AS domain_uid,
-         domain_type AS domain_type, nb_publications
+  OPTIONAL MATCH (concept)-[:HAS_PREF_LABEL]->(pref:Literal)
+  WITH p, concept, nb_publications, domain_type, collect(pref) AS pref_labels
+  RETURN p.uid AS uid,
+         p.display_name AS display_name,
+         coalesce(head([l IN pref_labels WHERE l.language = 'en' | l.value]),
+                  head([l IN pref_labels | l.value])) AS domain_name,
+         concept.uid AS domain_uid,
+         domain_type,
+         nb_publications
+  ORDER BY nb_publications DESC, domain_uid ASC
+
+---
+
+kind: tool
+name: list-person-top-documents
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  List an internal person's publications on the given Concept nodes, the most
+  strongly linked first: documents are ranked by their best HAS_TOPIC
+  similarity towards those concepts, then by publication date.
+parameters:
+  - name: person_uid
+    type: string
+    description: Unique identifier of the person (Person.uid)
+  - name: concept_uids
+    type: string
+    description: Comma-separated list of Concept.uid values, typically from list-person-research-concepts
+  - name: similarity_threshold
+    type: float
+    description: Minimum stored HAS_TOPIC similarity for a document to be linked to a concept
+    default: 0.0
+  - name: limit
+    type: integer
+    description: Maximum number of documents to return
+    default: 5
+statement: |
+  MATCH (p:Person {uid: $person_uid, external: false})
+  MATCH (p)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE ANY(role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ])
+  MATCH (doc)-[link:HAS_TOPIC]->(concept:Concept)
+  WHERE concept.uid IN [raw_uid IN split($concept_uids, ',') | trim(raw_uid)]
+    AND link.similarity >= $similarity_threshold
+  WITH doc, contrib, collect(concept.uid) AS concept_uids, max(link.similarity) AS best_similarity
+  ORDER BY best_similarity DESC, doc.publication_date DESC, doc.uid ASC
+  LIMIT $limit
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
+  WITH doc, contrib, concept_uids, best_similarity, head(collect(title.value)) AS title
+  RETURN doc.uid AS doc_uid,
+         title,
+         doc.publication_date AS publication_date,
+         concept_uids,
+         best_similarity,
+         [role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ] | split(role, '/')[-1]] AS roles
+  ORDER BY best_similarity DESC, publication_date DESC, doc_uid ASC
+
+---
+
+kind: tool
+name: list-document-summaries
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the abstract and subject keywords of each given document, in one call.
+  The English abstract is preferred when the document has several; `abstract` is
+  null when there is none.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Document.uid values
+  - name: max_keywords
+    type: integer
+    description: Maximum number of subject keywords per document
+    default: 5
+statement: |
+  MATCH (doc:Document)
+  WHERE doc.uid IN [raw_uid IN split($uids, ',') | trim(raw_uid)]
+  OPTIONAL MATCH (doc)-[:HAS_ABSTRACT]->(abstract:TextLiteral)
+  WITH doc, collect(abstract) AS abstracts
+  OPTIONAL MATCH (doc)-[:HAS_SUBJECT]->(:Concept)-[:HAS_PREF_LABEL]->(label:Literal)
+  WITH doc, abstracts, collect(DISTINCT label.value) AS keywords
+  RETURN doc.uid AS uid,
+         coalesce(head([a IN abstracts WHERE a.language = 'en' | a.value]),
+                  head([a IN abstracts | a.value])) AS abstract,
+         keywords[..$max_keywords] AS keywords
 
 ---
 
@@ -861,6 +957,128 @@ statement: |
 
 ---
 
+kind: tool
+name: list-concept-children
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the uids of the Concept nodes one level below the given ones in the
+  OpenAlex taxonomy (Domain > Field > SubField > Topic), via BROADER.
+  A Topic has no children.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values
+statement: |
+  WITH [raw_uid IN split($uids, ',') | trim(raw_uid)] AS uids
+  MATCH (child:Concept)-[:BROADER]->(parent:Concept)
+  WHERE parent.uid IN uids
+  RETURN DISTINCT child.uid AS uid
+  ORDER BY uid
+
+---
+
+kind: tool
+name: list-concept-siblings
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the uids of the Concept nodes sharing a parent with the given ones
+  (via BROADER), the given concepts themselves excluded.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values
+statement: |
+  WITH [raw_uid IN split($uids, ',') | trim(raw_uid)] AS uids
+  MATCH (concept:Concept)-[:BROADER]->(:Concept)<-[:BROADER]-(sibling:Concept)
+  WHERE concept.uid IN uids AND NOT sibling.uid IN uids
+  RETURN DISTINCT sibling.uid AS uid
+  ORDER BY uid
+
+---
+
+kind: tool
+name: list-concept-expert-evidence
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return the evidence behind an expert search: one row per (internal person,
+  document, topic) for the given Concept uids and their BROADER descendants down
+  to Topic level. Only aut, ths and spk contributions count.
+parameters:
+  - name: uids
+    type: string
+    description: Comma-separated list of Concept.uid values defining the search scope
+  - name: similarity_threshold
+    type: float
+    description: Minimum stored HAS_TOPIC similarity for a (document, topic) link to be returned
+    default: 0.0
+  - name: limit
+    type: integer
+    description: Maximum number of rows to return, cut in the documented sort order
+    default: 20000
+statement: |
+  MATCH (queried:Concept)
+  WHERE queried.uid IN [raw_uid IN split($uids, ',') | trim(raw_uid)]
+  MATCH (queried)<-[:BROADER*0..3]-(topic:Concept)
+  WITH DISTINCT topic
+  MATCH (doc:Document)-[link:HAS_TOPIC]->(topic)
+  WHERE link.similarity >= $similarity_threshold
+  MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(person:Person)
+  WHERE person.external = false
+    AND person.display_name IS NOT NULL
+    AND ANY(role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ])
+  OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
+  WITH person, doc, topic, link.similarity AS similarity, head(collect(title.value)) AS doc_title
+  RETURN person.uid AS person_uid,
+         person.display_name AS display_name,
+         doc.uid AS doc_uid,
+         doc_title,
+         doc.publication_date AS publication_date,
+         topic.uid AS topic_uid,
+         similarity
+  ORDER BY similarity DESC, doc_uid ASC, topic_uid ASC, person_uid ASC
+  LIMIT $limit
+
+---
+
+kind: tool
+name: get-person-publication-counts
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Return each given internal person's TOTAL publication count, every research
+  domain included.
+parameters:
+  - name: person_uids
+    type: string
+    description: Comma-separated list of Person.uid values
+statement: |
+  MATCH (p:Person)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(doc:Document)
+  WHERE p.uid IN [raw_uid IN split($person_uids, ',') | trim(raw_uid)]
+    AND p.external = false
+    AND ANY(role IN contrib.roles WHERE role IN [
+    'http://id.loc.gov/vocabulary/relators/aut',
+    'http://id.loc.gov/vocabulary/relators/ths',
+    'http://id.loc.gov/vocabulary/relators/spk'
+  ])
+  RETURN p.uid AS person_uid, count(doc) AS nb_publications_total
+
+---
+
 # Restricted toolset: curated domain tools only, no raw Cypher access.
 # Load with: client.load_toolset("crisalid-restricted")
 kind: toolset
@@ -880,8 +1098,14 @@ tools:
   - publications-by-theme
   - get-concepts-by-uid
   - get-concept-hierarchy
+  - get-person-publication-counts
   - list-concept-experts
+  - list-concept-children
+  - list-concept-siblings
+  - list-concept-expert-evidence
   - list-person-research-concepts
+  - list-person-top-documents
+  - list-document-summaries
 
 ---
 
@@ -902,11 +1126,17 @@ tools:
   - search-organization-unit-by-name
   - get-organization-unit-members
   - publications-by-theme
-  - execute-cypher-readonly
   - get-concepts-by-uid
   - get-concept-hierarchy
+  - get-person-publication-counts
   - list-concept-experts
+  - list-concept-children
+  - list-concept-siblings
+  - list-concept-expert-evidence
   - list-person-research-concepts
+  - list-person-top-documents
+  - list-document-summaries
+  - execute-cypher-readonly
 
 ---
 
@@ -917,6 +1147,11 @@ name: sorbobot
 tools:
   - get-concepts-by-uid
   - get-concept-hierarchy
-  - list-concept-experts
+  - list-concept-children
+  - list-concept-siblings
+  - list-concept-expert-evidence
+  - get-person-publication-counts
   - list-person-research-concepts
+  - list-person-top-documents
+  - list-document-summaries
   - search-person-by-name

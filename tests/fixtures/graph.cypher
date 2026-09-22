@@ -347,7 +347,7 @@ MATCH (child:Concept {uid: 'https://openalex.org/fields/17'}), (parent:Concept {
 MATCH (child:Concept {uid: 'https://openalex.org/subfields/1702'}), (parent:Concept {uid: 'https://openalex.org/fields/17'}) MERGE (child)-[:BROADER]->(parent);
 MATCH (child:Concept {uid: 'https://openalex.org/T11010'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent);
 
-// --- Internal researcher with two publications tagged Artificial Intelligence ---
+// --- Internal researcher: author of test-doc-1, jury president of test-doc-3 ---
 CREATE (:Person {uid: 'test-person-jdurand', display_name: 'Jeannette Durand', display_name_variants: ['J. Durand'], external: false});
 
 CREATE (:Document:JournalArticle {uid: 'test-doc-1', document_type: 'JournalArticle', publication_date: '2020-01-15'});
@@ -359,17 +359,7 @@ MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-1'})
 MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
 MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t);
 
-
-CREATE (:Document:JournalArticle {uid: 'test-doc-1-dup', document_type: 'JournalArticle', publication_date: '2020-01-15'});
-CREATE (:Literal {language: 'en', value: 'active learning strategies for knowledge graphs', type: 'document_title'});
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Literal {value: 'active learning strategies for knowledge graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
-
-CREATE (:Contribution {uid: 'test-contrib-1-dup', roles: ['AUTHOR']});
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
-MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1-dup'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
-MATCH (d:Document {uid: 'test-doc-1-dup'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t);
-
-// --- Second internal researcher, co-author (thesis director) on doc1 — for list-domain-experts ---
+// --- Second internal researcher: thesis director of test-doc-1, author of test-doc-2 ---
 CREATE (:Person {uid: 'test-person-mlefevre', display_name: 'Marc Lefevre', display_name_variants: [], external: false});
 CREATE (:Contribution {uid: 'test-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths']});
 MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
@@ -380,3 +370,26 @@ CREATE (:Person {uid: 'test-person-external', display_name: 'External Researcher
 CREATE (:Contribution {uid: 'test-contrib-3', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
 MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
 MATCH (p:Person {uid: 'test-person-external'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+
+// --- Sibling Topic under Artificial Intelligence — for list-concept-children/siblings ---
+CREATE (:Concept:Topic {uid: 'https://openalex.org/T10028', uri: 'https://openalex.org/T10028'});
+CREATE (:Literal:Embeddable {value: 'Topic Modeling', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+MATCH (c:Concept {uid: 'https://openalex.org/T10028'}), (l:Literal {value: 'Topic Modeling', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (child:Concept {uid: 'https://openalex.org/T10028'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent);
+
+CREATE (:Document:JournalArticle {uid: 'test-doc-2', document_type: 'JournalArticle', publication_date: '2023'});
+CREATE (:Literal {language: 'en', value: 'Neural Topic Models for Scientific Corpora', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-2'}), (t:Literal {value: 'Neural Topic Models for Scientific Corpora'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'test-contrib-4', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-2'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-2'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.7}]->(t);
+
+// --- Jury membership: Jeannette Durand only presided the jury of test-doc-3 (pra role), which is not a publication ---
+CREATE (:Document:Thesis {uid: 'test-doc-3', document_type: 'Thesis', publication_date: '2021'});
+CREATE (:Literal {language: 'en', value: 'A Thesis on Topic Models', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-3'}), (t:Literal {value: 'A Thesis on Topic Models'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'test-contrib-5', roles: ['http://id.loc.gov/vocabulary/relators/pra']});
+MATCH (d:Document {uid: 'test-doc-3'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-3'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.9}]->(t);

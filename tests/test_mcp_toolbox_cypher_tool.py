@@ -21,8 +21,8 @@ async def test_count_documents(cypher_tool):
     result = await cypher_tool.ainvoke(
         {"cypher": "MATCH (n:Document) RETURN count(n) AS count"}
     )
-    # 1 document d'origine + 2 ajoutés par la fixture OpenAlex
-    assert '"count":3' in str(result)
+    # 1 document d'origine + 3 ajoutés par la fixture OpenAlex (test-doc-1, test-doc-2, test-doc-3)
+    assert '"count":4' in str(result)
 
 
 @pytest.mark.asyncio

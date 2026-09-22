@@ -5,8 +5,14 @@ import pytest
 _CONCEPT_TOOLS = {
     "get-concepts-by-uid",
     "get-concept-hierarchy",
+    "get-person-publication-counts",
     "list-concept-experts",
+    "list-concept-children",
+    "list-concept-siblings",
+    "list-concept-expert-evidence",
     "list-person-research-concepts",
+    "list-person-top-documents",
+    "list-document-summaries",
 }
 
 _CURATED_TOOLS = {
@@ -42,12 +48,7 @@ async def test_unrestricted_toolset_tools(toolbox_client):
 
 @pytest.mark.asyncio
 async def test_sorbobot_toolset_tools(toolbox_client):
-    """
-    SorboBot loads only what it calls.
-
-    It has no ReAct loop: every tool is invoked by name from Python, so a tool
-    in this toolset that no code calls is unreachable, not optional.
-    """
+    """SorboBot loads only what it calls."""
     tools = await toolbox_client.aload_toolset("sorbobot")
     names = set(t.name for t in tools)
-    assert names == _CONCEPT_TOOLS | {"search-person-by-name"}
+    assert names == (_CONCEPT_TOOLS - {"list-concept-experts"}) | {"search-person-by-name"}

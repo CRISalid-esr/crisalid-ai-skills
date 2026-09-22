@@ -1,4 +1,4 @@
-# crisalid-ai-skills
+############# # crisalid-ai-skills
 
 Tooling and skills for AI-powered access to the CRISalid institutional knowledge graph. This repository provides MCP-compatible tools that wrap curated queries against the CRISalid Neo4j graph, making it easy to integrate structured academic data (researchers, publications, topics, organisations) into LLM-based agents and workflows.
 
@@ -6,44 +6,31 @@ Tooling and skills for AI-powered access to the CRISalid institutional knowledge
 
 ## MCP Toolbox
 
-Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), a lightweight server that exposes named Cypher queries as MCP tools. Two main tool collections are available:
+Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), a lightweight server that exposes named Cypher queries as MCP tools. Two toolsets are available:
 
-### CRISalid Tools
 
-| Toolset | Tools | Use case |
-|---|---|---|
-| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` | Clients needing curated domain tools |
+| Toolset                 | Tools                                                                        | Use case                                  |
+| ----------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
+| `crisalid-restricted`   | `get-crisalid-schema`, `list-person-publications`                            | Clients needing curated domain tools      |
 | `crisalid-unrestricted` | `get-crisalid-schema`, `list-person-publications`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
-
-### SorboBot Tools
-
-Four tools navigate the OpenAlex concept taxonomy. They carry no agent prefix:
-SorboBot drives them today, but nothing about them is SorboBot-specific, so
-they belong to the general toolsets too.
-
-| Tool | Use case |
-|---|---|
-| `get-concepts-by-uid` | Look up concepts by OpenAlex uid, with their document counts |
-| `get-concept-hierarchy` | Walk a concept's ancestor chain, Domain down to the concept itself |
-| `list-concept-experts` | List internal researchers publishing on given concepts |
-| `list-person-research-concepts` | List the taxonomy concepts a person publishes on |
 
 ### Run the MCP server
 
 First, install the toolbox. Two options:
 
 **Via npx (no installation required):**
+
 ```bash
-# Both CRISalid and SorboBot tools (all toolsets):
 npx @toolbox-sdk/server --config tools.yaml
 ```
 
-**Via binary (Linux):** 
+**Via binary (Linux):**
 
 Either download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
 Or directly run this from folder "mcp-toolbox":
+
 ```bash
-export VERSION=1.9.0
+export VERSION=1.2.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
 chmod +x toolbox
 ```
@@ -55,12 +42,8 @@ Finally, start the server:
 ```bash
 cd mcp-toolbox
 set -a && source .env && set +a
-
-# Both CRISalid and SorboBot tools available (authentication disabled):
-./toolbox --config tools.yaml
-
-# With Keycloak authentication (recommended for production):
-./toolbox --config tools-auth.yaml
+./toolbox --config tools.yaml            # without authentication
+./toolbox --config tools-auth.yaml      # with Keycloak authentication
 ```
 
 The server listens on `http://127.0.0.1:5000` by default.
@@ -72,8 +55,6 @@ Add `--ui` to also launch a web interface for browsing and manually invoking too
 # UI available at http://127.0.0.1:5000/ui
 ```
 
-**Note:** Both `tools.yaml` and `tools-auth.yaml` contain all tools and toolsets. The only difference is that `tools-auth.yaml` adds Keycloak OIDC authentication to curated tools. See the [Configuration Synchronization](#configuration-synchronization) section in `CLAUDE.md` for details.
-
 ### Run with Docker
 
 A `Dockerfile` is provided in `mcp-toolbox/`. It downloads the official toolbox binary and runs the authenticated configuration (`tools-auth.yaml`).
@@ -83,17 +64,17 @@ A `Dockerfile` is provided in `mcp-toolbox/`. It downloads the official toolbox 
 ```bash
 docker build -t crisalid-graph-mcp mcp-toolbox/
 # Pin a specific toolbox version:
-docker build --build-arg TOOLBOX_VERSION=v1.8.0 -t crisalid-graph-mcp mcp-toolbox/
+docker build --build-arg TOOLBOX_VERSION=v1.1.0 -t crisalid-graph-mcp mcp-toolbox/
 ```
 
 **Run:**
 
 ```bash
 docker run -p 5000:5000 \
-  -e NEO4J_URI=bolt://<host>:7687 \
+  -e NEO4J_URI=bolt://host:7687 \
   -e NEO4J_USER=neo4j \
-  -e NEO4J_PASSWORD=<password> \
-  -e KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm> \
+  -e NEO4J_PASSWORD=password \
+  -e KEYCLOAK_ISSUER=https://keycloak-host/realms/realm \
   crisalid-graph-mcp
 ```
 
@@ -112,16 +93,16 @@ The server listens on `0.0.0.0:5000` inside the container, exposed on port 5000.
 docker run -p 5000:5000 \
   -e NEO4J_URI=bolt://host.docker.internal:7687 \
   -e NEO4J_USER=neo4j \
-  -e NEO4J_PASSWORD=<password> \
-  -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/<realm> \
+  -e NEO4J_PASSWORD=password \
+  -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/realm \
   --add-host=host.docker.internal:host-gateway \
-  --add-host=keycloak.local:<host-ip> \
+  --add-host=keycloak.local:host-ip \
   crisalid-graph-mcp
 ```
 
 - `--add-host=host.docker.internal:host-gateway` — lets the container reach services on the host (Neo4j)
-- `--add-host=keycloak.local:<host-ip>` — resolves the Keycloak hostname inside the container
-The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
+- `--add-host=keycloak.local:host-ip` — resolves the Keycloak hostname inside the container
+  The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
 
 ```bash
 docker run ... \
@@ -140,14 +121,16 @@ docker run ... \
 #### Environment variables
 
 **Toolbox server** (`tools-auth.yaml` / Docker):
+
 ```
-KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
+KEYCLOAK_ISSUER=https://keycloak-host/realms/realm
 ```
 
 **Sample clients only** (not needed by the server):
+
 ```
-KEYCLOAK_CLIENT_ID=<client-id>
-KEYCLOAK_CLIENT_SECRET=<client-secret>
+KEYCLOAK_CLIENT_ID=client-id
+KEYCLOAK_CLIENT_SECRET=client-secret
 KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
 ```
 
@@ -156,6 +139,7 @@ KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
 **1. Create a client**
 
 In Keycloak admin → Clients → Create client:
+
 - Client type: OpenID Connect
 - Client ID: e.g. `example-mcp-client`
 - Enable *Client authentication* (confidential)
@@ -166,14 +150,15 @@ In Keycloak admin → Clients → Create client:
 
 The toolbox validates the JWT `aud` claim against the hardcoded audience `crisalid-graph-mcp`. By default Keycloak does not include this in `aud`, so this mapper is required.
 
-In the client's page → Client scopes → click the dedicated scope (`<client-id>-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
+In the client's page → Client scopes → click the dedicated scope (`client-id-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
+
 - Name: `mcp-example-client-audience`
 - Included Custom Audience: `crisalid-graph-mcp`
 - Add to access token: On
 
 **3. Note the client secret**
 
-Clients → `<your-client-id>` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
+Clients → `your-client-id` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
 
 #### SSL certificates in local environments
 
@@ -184,7 +169,7 @@ If your Keycloak instance uses a self-signed certificate:
 
 ```bash
 # Export the cert
-openssl s_client -connect <keycloak-host>:<port> -showcerts </dev/null 2>/dev/null \
+openssl s_client -connect keycloak-host:port -showcerts /dev/null \
   | openssl x509 -outform PEM > /tmp/keycloak-local.crt
 
 # Ubuntu/Debian
@@ -212,16 +197,12 @@ uv run python samples/load_restricted_toolset_authenticated.py
 
 ### Run the tests
 
-Tests require a dedicated Neo4j instance on port 7690 (separate from the production database) and the toolbox server running against it.
-
-> Not 7688: on a machine running Neo4j Desktop that port is its routing
-> connector, backed by the same process as the real database — the suite runs
-> `MATCH (n) DETACH DELETE n`.
+Tests require a dedicated Neo4j instance on port 7688 (separate from the production database) and the toolbox server running against it.
 
 **1. Start the test Neo4j container**
 
 ```bash
-docker run --publish=7476:7474 --publish=7690:7687 \
+docker run --publish=7475:7474 --publish=7688:7687 \
   --env=NEO4J_AUTH=none \
   -e NEO4J_apoc_export_file_enabled=true \
   -e NEO4J_apoc_import_file_enabled=true \
@@ -234,14 +215,10 @@ docker run --publish=7476:7474 --publish=7690:7687 \
 
 ```bash
 cd mcp-toolbox
-set -a && source .env.test && set +a   # points to bolt://localhost:7690, no real credentials
+set -a && source .env.test && set +a   # points to bolt://localhost:7688, no real credentials
 npx @toolbox-sdk/server --config tools.yaml
 # or: ./toolbox --config tools.yaml  (if using the downloaded binary)
 ```
-
-The server loads all three toolsets automatically:
-- `crisalid-restricted` and `crisalid-unrestricted` — CRISalid tools
-- `sorbobot` — the subset SorboBot calls
 
 **3. Run the test suite**
 
