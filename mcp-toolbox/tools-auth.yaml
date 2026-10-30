@@ -1003,6 +1003,34 @@ statement: |
 ---
 
 kind: tool
+name: search-concept-by-name
+type: neo4j-cypher
+source: crisalid-neo4j
+authRequired:
+  - crisalid-keycloak
+description: |
+  Find the Concept nodes of the OpenAlex taxonomy (Domain/Field/SubField/Topic)
+  whose preferred label equals the given name, ignoring case and surrounding
+  whitespace. Meant to resolve a concept name quoted from an earlier answer back
+  to its uid; it is not a fuzzy search. One name per call, because topic labels
+  may contain commas.
+parameters:
+  - name: name
+    type: string
+    description: Preferred label of the concept, exactly as displayed (case-insensitive)
+statement: |
+  WITH toLower(trim($name)) AS wanted
+  MATCH (concept:Concept)-[:HAS_PREF_LABEL]->(label:Literal)
+  WHERE toLower(trim(label.value)) = wanted
+  WITH concept, head(collect(label.value)) AS name
+  RETURN concept.uid AS uid,
+         name,
+         [lbl IN labels(concept) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS type
+  ORDER BY type, uid
+
+---
+
+kind: tool
 name: list-concept-expert-evidence
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -1102,6 +1130,7 @@ tools:
   - list-concept-experts
   - list-concept-children
   - list-concept-siblings
+  - search-concept-by-name
   - list-concept-expert-evidence
   - list-person-research-concepts
   - list-person-top-documents
@@ -1132,6 +1161,7 @@ tools:
   - list-concept-experts
   - list-concept-children
   - list-concept-siblings
+  - search-concept-by-name
   - list-concept-expert-evidence
   - list-person-research-concepts
   - list-person-top-documents
@@ -1149,6 +1179,7 @@ tools:
   - get-concept-hierarchy
   - list-concept-children
   - list-concept-siblings
+  - search-concept-by-name
   - list-concept-expert-evidence
   - get-person-publication-counts
   - list-person-research-concepts

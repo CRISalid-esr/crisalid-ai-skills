@@ -9,6 +9,7 @@ _CONCEPT_TOOLS = {
     "list-concept-experts",
     "list-concept-children",
     "list-concept-siblings",
+    "search-concept-by-name",
     "list-concept-expert-evidence",
     "list-person-research-concepts",
     "list-person-top-documents",

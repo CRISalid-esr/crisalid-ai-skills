@@ -71,6 +71,16 @@ async def test_concept_experts_are_the_internal_authors(toolbox_client):
     assert experts == {PERSON_JDURAND: 1, PERSON_MLEFEVRE: 1}
 
 
+@pytest.mark.asyncio
+async def test_search_concept_by_name_resolves_a_displayed_label(toolbox_client):
+    """Exact label match, case and surrounding whitespace ignored; commas inside the label are fine."""
+    rows = await _call(toolbox_client, "search-concept-by-name", {"name": "  logic, reasoning, AND knowledge "})
+    assert [(row["uid"], row["name"], row["type"]) for row in rows] == [
+        (TOPIC_UID, "Logic, Reasoning, and Knowledge", "Topic")
+    ]
+    assert await _call(toolbox_client, "search-concept-by-name", {"name": "Logic"}) == []
+
+
 # ── expert evidence ─────────────────────────────────────────────────
 
 
