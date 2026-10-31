@@ -9,9 +9,9 @@ SUBFIELD_UID = "https://openalex.org/subfields/1702"
 TOPIC_UID = "https://openalex.org/T11010"
 SIBLING_TOPIC_UID = "https://openalex.org/T10028"
 
-# test-doc-1 (TOPIC, 0.85): Jeannette Durand author, Marc Lefevre thesis director, an external author.
-# test-doc-2 (SIBLING_TOPIC, 0.7): Marc Lefevre author.
-# test-doc-3 (SIBLING_TOPIC, 0.9): Jeannette Durand jury president only.
+# test-doc-1 (TOPIC, 0.85, source crisalid): Jeannette Durand author, Marc Lefevre thesis director, an external author.
+# test-doc-2 (SIBLING_TOPIC, 0.7, source crisalid): Marc Lefevre author.
+# test-doc-3 (SIBLING_TOPIC, 0.9, source openalex): Jeannette Durand jury president only.
 PERSON_JDURAND = "test-person-jdurand"
 PERSON_MLEFEVRE = "test-person-mlefevre"
 PERSON_EXTERNAL = "test-person-external"
@@ -51,6 +51,22 @@ async def test_concepts_by_uid_give_labels_and_document_counts(toolbox_client):
 
     strict = await _call(toolbox_client, "get-concepts-by-uid", {"uids": TOPIC_UID, "similarity_threshold": 0.9})
     assert strict[0]["nb_docs"] == 0
+
+
+@pytest.mark.asyncio
+async def test_has_topic_links_are_filtered_by_source(toolbox_client):
+    crisalid = await _call(toolbox_client, "get-concepts-by-uid", {"uids": DOMAIN_UID, "sources": "crisalid"})
+    assert crisalid[0]["nb_docs"] == 2
+    openalex = await _call(toolbox_client, "get-concepts-by-uid", {"uids": DOMAIN_UID, "sources": " openalex ,other"})
+    assert openalex[0]["nb_docs"] == 1
+    evidence = await _call(toolbox_client, "list-concept-expert-evidence", {"uids": SUBFIELD_UID, "sources": "openalex"})
+    assert evidence == []  # test-doc-3 is the only openalex link and has no author
+    concepts = await _call(
+        toolbox_client, "list-person-research-concepts", {"person_uid": PERSON_MLEFEVRE, "sources": "openalex"}
+    )
+    assert concepts == []
+    experts = await _call(toolbox_client, "list-concept-experts", {"uids": SUBFIELD_UID, "sources": "openalex"})
+    assert experts == []
 
 
 @pytest.mark.asyncio

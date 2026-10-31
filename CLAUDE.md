@@ -143,7 +143,7 @@ SourceRecords are connected to a source layer representing bibliographic referen
 - **Genuine SKOS concepts**: have a `uri` (identical to `uid`) and label relations: `(concept)-[:HAS_PREF_LABEL]->(l:Literal {type: 'concept_pref_label'})`, `(concept)-[:HAS_ALT_LABEL]->(l:Literal {type: 'concept_alt_label'})`
 - **Free-text keywords** (legacy): no `uri`, carry only a `prefLabel` property directly on the node
 
-**Distinction from taxonomy terms**: Domains, Fields, Sub-fields and Topics (OpenAlex taxonomy) are also typed as `Concept`. Topics are linked to publications via `(doc:Document)-[:HAS_TOPIC]->(topic:Concept)` (not `HAS_SUBJECT`); the relation carries a `similarity` **float**, the confidence of the topic assignment, which several tools filter on through a `similarity_threshold` parameter.
+**Distinction from taxonomy terms**: Domains, Fields, Sub-fields and Topics (OpenAlex taxonomy) are also typed as `Concept`. Topics are linked to publications via `(doc:Document)-[:HAS_TOPIC]->(topic:Concept)` (not `HAS_SUBJECT`); the relation carries a `score` **float** (the cosine similarity computed by crisalid-taxi for `source: 'crisalid'` links, the OpenAlex score for `source: 'openalex'` links), which several tools filter on through a `similarity_threshold` parameter and expose as `similarity` columns. The same tools take a comma-separated `sources` parameter restricting the links to the given `source` values (empty keeps every link).
 
 ### Contributions and co-authors
 

@@ -634,8 +634,12 @@ parameters:
     description: Comma-separated list of Concept.uid values to look up
   - name: similarity_threshold
     type: float
-    description: Minimum HAS_TOPIC similarity for a document to count toward nb_docs
+    description: Minimum stored HAS_TOPIC score for a document to count toward nb_docs
     default: 0.0
+  - name: sources
+    type: string
+    description: Comma-separated HAS_TOPIC source values to keep (crisalid, openalex); empty keeps every link
+    default: ""
 statement: |
   WITH split($uids, ',') AS uid_list
   UNWIND uid_list AS raw_uid
@@ -655,7 +659,8 @@ statement: |
     WITH [domain] + descendants AS subtree
     UNWIND subtree AS node
     OPTIONAL MATCH (doc:Document)-[r:HAS_TOPIC]->(node)
-    WHERE r.similarity >= $similarity_threshold
+    WHERE r.score >= $similarity_threshold
+      AND ($sources = '' OR coalesce(r.source, '') IN [s IN split($sources, ',') | trim(s)])
     RETURN count(DISTINCT doc) AS nb_docs
   }
   WITH domain, name, type, description, nb_docs,
@@ -682,6 +687,10 @@ parameters:
   - name: uids
     type: string
     description: Comma-separated list of Concept.uid values
+  - name: sources
+    type: string
+    description: Comma-separated HAS_TOPIC source values to keep (crisalid, openalex); empty keeps every link
+    default: ""
   - name: limit
     type: integer
     description: Maximum number of researchers to return
@@ -698,6 +707,7 @@ statement: |
   WITH DISTINCT domain
   WHERE domain IS NOT NULL
   MATCH (doc:Document)-[r:HAS_TOPIC]->(domain)
+  WHERE ($sources = '' OR coalesce(r.source, '') IN [s IN split($sources, ',') | trim(s)])
   MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)
   WHERE ANY(role IN contrib.roles WHERE role IN [
     'http://id.loc.gov/vocabulary/relators/aut',
@@ -708,7 +718,7 @@ statement: |
   WHERE person.display_name IS NOT NULL AND person.external = false
   MATCH (doc)-[:HAS_TITLE]->(title:Literal)
   OPTIONAL MATCH (domain)-[:HAS_PREF_LABEL]->(domain_pref:Literal)
-  WITH person, domain, r.similarity AS similarity, doc, title,
+  WITH person, domain, r.score AS similarity, doc, title,
        head(collect(DISTINCT domain_pref.value)) AS domain_name,
        [lbl IN labels(domain) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type
   OPTIONAL MATCH (doc)-[:HAS_SUBJECT]->(concept:Concept)-[:HAS_PREF_LABEL]->(keyword:Literal)
@@ -755,8 +765,12 @@ parameters:
     description: Unique identifier of the person (Person.uid)
   - name: similarity_threshold
     type: float
-    description: Minimum stored HAS_TOPIC similarity for a publication to count toward a concept
+    description: Minimum stored HAS_TOPIC score for a publication to count toward a concept
     default: 0.0
+  - name: sources
+    type: string
+    description: Comma-separated HAS_TOPIC source values to keep (crisalid, openalex); empty keeps every link
+    default: ""
   - name: min_depth
     type: integer
     description: >-
@@ -777,7 +791,8 @@ statement: |
     'http://id.loc.gov/vocabulary/relators/spk'
   ])
   MATCH (doc)-[link:HAS_TOPIC]->(concept:Concept)
-  WHERE link.similarity >= $similarity_threshold
+  WHERE link.score >= $similarity_threshold
+    AND ($sources = '' OR coalesce(link.source, '') IN [s IN split($sources, ',') | trim(s)])
   WITH p, concept, count(doc) AS nb_publications
   WITH p, concept, nb_publications,
        [lbl IN labels(concept) WHERE lbl IN ['Domain', 'Field', 'SubField', 'Topic']][0] AS domain_type
@@ -817,8 +832,12 @@ parameters:
     description: Comma-separated list of Concept.uid values, typically from list-person-research-concepts
   - name: similarity_threshold
     type: float
-    description: Minimum stored HAS_TOPIC similarity for a document to be linked to a concept
+    description: Minimum stored HAS_TOPIC score for a document to be linked to a concept
     default: 0.0
+  - name: sources
+    type: string
+    description: Comma-separated HAS_TOPIC source values to keep (crisalid, openalex); empty keeps every link
+    default: ""
   - name: limit
     type: integer
     description: Maximum number of documents to return
@@ -833,8 +852,9 @@ statement: |
   ])
   MATCH (doc)-[link:HAS_TOPIC]->(concept:Concept)
   WHERE concept.uid IN [raw_uid IN split($concept_uids, ',') | trim(raw_uid)]
-    AND link.similarity >= $similarity_threshold
-  WITH doc, contrib, collect(concept.uid) AS concept_uids, max(link.similarity) AS best_similarity
+    AND link.score >= $similarity_threshold
+    AND ($sources = '' OR coalesce(link.source, '') IN [s IN split($sources, ',') | trim(s)])
+  WITH doc, contrib, collect(concept.uid) AS concept_uids, max(link.score) AS best_similarity
   ORDER BY best_similarity DESC, doc.publication_date DESC, doc.uid ASC
   LIMIT $limit
   OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
@@ -994,8 +1014,12 @@ parameters:
     description: Comma-separated list of Concept.uid values defining the search scope
   - name: similarity_threshold
     type: float
-    description: Minimum stored HAS_TOPIC similarity for a (document, topic) link to be returned
+    description: Minimum stored HAS_TOPIC score for a (document, topic) link to be returned
     default: 0.0
+  - name: sources
+    type: string
+    description: Comma-separated HAS_TOPIC source values to keep (crisalid, openalex); empty keeps every link
+    default: ""
   - name: limit
     type: integer
     description: Maximum number of rows to return, cut in the documented sort order
@@ -1006,7 +1030,8 @@ statement: |
   MATCH (queried)<-[:BROADER*0..3]-(topic:Concept)
   WITH DISTINCT topic
   MATCH (doc:Document)-[link:HAS_TOPIC]->(topic)
-  WHERE link.similarity >= $similarity_threshold
+  WHERE link.score >= $similarity_threshold
+    AND ($sources = '' OR coalesce(link.source, '') IN [s IN split($sources, ',') | trim(s)])
   MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(person:Person)
   WHERE person.external = false
     AND person.display_name IS NOT NULL
@@ -1016,7 +1041,7 @@ statement: |
     'http://id.loc.gov/vocabulary/relators/spk'
   ])
   OPTIONAL MATCH (doc)-[:HAS_TITLE]->(title:Literal)
-  WITH person, doc, topic, link.similarity AS similarity, head(collect(title.value)) AS doc_title
+  WITH person, doc, topic, link.score AS similarity, head(collect(title.value)) AS doc_title
   RETURN person.uid AS person_uid,
          person.display_name AS display_name,
          doc.uid AS doc_uid,

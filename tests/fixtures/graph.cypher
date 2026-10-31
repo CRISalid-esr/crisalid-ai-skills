@@ -357,7 +357,7 @@ MATCH (d:Document {uid: 'test-doc-1'}), (t:Literal {value: 'Active Learning Stra
 CREATE (:Contribution {uid: 'test-contrib-1', roles: ['AUTHOR', 'http://id.loc.gov/vocabulary/relators/aut']});
 MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
 MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
-MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.85}]->(t);
+MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {score: 0.85, source: 'crisalid'}]->(t);
 
 // --- Second internal researcher: thesis director of test-doc-1, author of test-doc-2 ---
 CREATE (:Person {uid: 'test-person-mlefevre', display_name: 'Marc Lefevre', display_name_variants: [], external: false});
@@ -383,7 +383,7 @@ MATCH (d:Document {uid: 'test-doc-2'}), (t:Literal {value: 'Neural Topic Models 
 CREATE (:Contribution {uid: 'test-contrib-4', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
 MATCH (d:Document {uid: 'test-doc-2'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
 MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
-MATCH (d:Document {uid: 'test-doc-2'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.7}]->(t);
+MATCH (d:Document {uid: 'test-doc-2'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {score: 0.7, source: 'crisalid'}]->(t);
 
 // --- Jury membership: Jeannette Durand only presided the jury of test-doc-3 (pra role), which is not a publication ---
 CREATE (:Document:Thesis {uid: 'test-doc-3', document_type: 'Thesis', publication_date: '2021'});
@@ -392,4 +392,4 @@ MATCH (d:Document {uid: 'test-doc-3'}), (t:Literal {value: 'A Thesis on Topic Mo
 CREATE (:Contribution {uid: 'test-contrib-5', roles: ['http://id.loc.gov/vocabulary/relators/pra']});
 MATCH (d:Document {uid: 'test-doc-3'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
 MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
-MATCH (d:Document {uid: 'test-doc-3'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {similarity: 0.9}]->(t);
+MATCH (d:Document {uid: 'test-doc-3'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {score: 0.9, source: 'openalex'}]->(t);
