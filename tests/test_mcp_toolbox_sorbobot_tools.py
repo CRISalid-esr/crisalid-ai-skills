@@ -65,7 +65,12 @@ async def test_has_topic_links_are_filtered_by_source(toolbox_client):
         toolbox_client, "list-person-research-concepts", {"person_uid": PERSON_MLEFEVRE, "sources": "openalex"}
     )
     assert concepts == []
-    experts = await _call(toolbox_client, "list-concept-experts", {"uids": SUBFIELD_UID, "sources": "openalex"})
+    experts = await _call(
+        toolbox_client,
+        "list-concept-experts",
+        {"uids": SUBFIELD_UID, "sources": "openalex"},
+        toolset="crisalid-restricted",
+    )
     assert experts == []
 
 
