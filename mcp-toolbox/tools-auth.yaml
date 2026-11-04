@@ -1041,7 +1041,8 @@ parameters:
 statement: |
   WITH toLower(trim($name)) AS wanted
   MATCH (concept:Concept)-[:HAS_PREF_LABEL]->(label:Literal)
-  WHERE toLower(trim(label.value)) = wanted
+  WHERE (concept:Domain OR concept:Field OR concept:SubField OR concept:Topic)
+    AND toLower(trim(label.value)) = wanted
   WITH concept, head(collect(label.value)) AS name
   RETURN concept.uid AS uid,
          name,
