@@ -1,4 +1,4 @@
-############# # crisalid-ai-skills
+# crisalid-ai-skills
 
 Tooling and skills for AI-powered access to the CRISalid institutional knowledge graph. This repository provides MCP-compatible tools that wrap curated queries against the CRISalid Neo4j graph, making it easy to integrate structured academic data (researchers, publications, topics, organisations) into LLM-based agents and workflows.
 
@@ -8,10 +8,9 @@ Tooling and skills for AI-powered access to the CRISalid institutional knowledge
 
 Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), a lightweight server that exposes named Cypher queries as MCP tools. Two toolsets are available:
 
-
-| Toolset                 | Tools                                                                        | Use case                                  |
-| ----------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
-| `crisalid-restricted`   | `get-crisalid-schema`, `list-person-publications`                            | Clients needing curated domain tools      |
+| Toolset | Tools | Use case |
+|---|---|---|
+| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` | Clients needing curated domain tools |
 | `crisalid-unrestricted` | `get-crisalid-schema`, `list-person-publications`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
 
 ### Run the MCP server
@@ -19,16 +18,14 @@ Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/m
 First, install the toolbox. Two options:
 
 **Via npx (no installation required):**
-
 ```bash
 npx @toolbox-sdk/server --config tools.yaml
 ```
 
-**Via binary (Linux):**
+**Via binary (Linux):** 
 
 Either download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
 Or directly run this from folder "mcp-toolbox":
-
 ```bash
 export VERSION=1.2.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
@@ -71,10 +68,10 @@ docker build --build-arg TOOLBOX_VERSION=v1.1.0 -t crisalid-graph-mcp mcp-toolbo
 
 ```bash
 docker run -p 5000:5000 \
-  -e NEO4J_URI=bolt://host:7687 \
+  -e NEO4J_URI=bolt://<host>:7687 \
   -e NEO4J_USER=neo4j \
-  -e NEO4J_PASSWORD=password \
-  -e KEYCLOAK_ISSUER=https://keycloak-host/realms/realm \
+  -e NEO4J_PASSWORD=<password> \
+  -e KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm> \
   crisalid-graph-mcp
 ```
 
@@ -93,16 +90,16 @@ The server listens on `0.0.0.0:5000` inside the container, exposed on port 5000.
 docker run -p 5000:5000 \
   -e NEO4J_URI=bolt://host.docker.internal:7687 \
   -e NEO4J_USER=neo4j \
-  -e NEO4J_PASSWORD=password \
-  -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/realm \
+  -e NEO4J_PASSWORD=<password> \
+  -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/<realm> \
   --add-host=host.docker.internal:host-gateway \
-  --add-host=keycloak.local:host-ip \
+  --add-host=keycloak.local:<host-ip> \
   crisalid-graph-mcp
 ```
 
 - `--add-host=host.docker.internal:host-gateway` — lets the container reach services on the host (Neo4j)
-- `--add-host=keycloak.local:host-ip` — resolves the Keycloak hostname inside the container
-  The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
+- `--add-host=keycloak.local:<host-ip>` — resolves the Keycloak hostname inside the container
+The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
 
 ```bash
 docker run ... \
@@ -121,16 +118,14 @@ docker run ... \
 #### Environment variables
 
 **Toolbox server** (`tools-auth.yaml` / Docker):
-
 ```
-KEYCLOAK_ISSUER=https://keycloak-host/realms/realm
+KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
 ```
 
 **Sample clients only** (not needed by the server):
-
 ```
-KEYCLOAK_CLIENT_ID=client-id
-KEYCLOAK_CLIENT_SECRET=client-secret
+KEYCLOAK_CLIENT_ID=<client-id>
+KEYCLOAK_CLIENT_SECRET=<client-secret>
 KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
 ```
 
@@ -139,7 +134,6 @@ KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
 **1. Create a client**
 
 In Keycloak admin → Clients → Create client:
-
 - Client type: OpenID Connect
 - Client ID: e.g. `example-mcp-client`
 - Enable *Client authentication* (confidential)
@@ -150,15 +144,14 @@ In Keycloak admin → Clients → Create client:
 
 The toolbox validates the JWT `aud` claim against the hardcoded audience `crisalid-graph-mcp`. By default Keycloak does not include this in `aud`, so this mapper is required.
 
-In the client's page → Client scopes → click the dedicated scope (`client-id-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
-
+In the client's page → Client scopes → click the dedicated scope (`<client-id>-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
 - Name: `mcp-example-client-audience`
 - Included Custom Audience: `crisalid-graph-mcp`
 - Add to access token: On
 
 **3. Note the client secret**
 
-Clients → `your-client-id` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
+Clients → `<your-client-id>` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
 
 #### SSL certificates in local environments
 
@@ -169,7 +162,7 @@ If your Keycloak instance uses a self-signed certificate:
 
 ```bash
 # Export the cert
-openssl s_client -connect keycloak-host:port -showcerts /dev/null \
+openssl s_client -connect <keycloak-host>:<port> -showcerts </dev/null 2>/dev/null \
   | openssl x509 -outform PEM > /tmp/keycloak-local.crt
 
 # Ubuntu/Debian
