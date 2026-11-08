@@ -9,7 +9,7 @@ RESEARCH_UNIT_UID = "local-ru-123456"
 BARE_LOGIN = "jmartin"
 BARE_LOGIN_EPPN = "jmartin@univ-domain.edu"
 COLLABORATOR_UID = "local-jmartin@univ-domain.edu"
-UNKNOWN_LOGIN = "nobody@univ-domain.edu"
+UNKNOWN_USERNAME = "nobody@univ-domain.edu"
 
 
 @pytest.fixture
@@ -19,7 +19,9 @@ async def current_person_tool(toolbox_client):
 
 
 def _rows(result):
-    return json.loads(result) if isinstance(result, str) else result
+    # The toolbox serialises a Neo4j result without rows as null, not as an empty list.
+    data = json.loads(result) if isinstance(result, str) else result
+    return data or []
 
 
 @pytest.mark.asyncio
@@ -55,6 +57,6 @@ async def test_get_current_person_result_shape(current_person_tool):
 
 
 @pytest.mark.asyncio
-async def test_get_current_person_unknown_login_is_empty(current_person_tool):
-    data = _rows(await current_person_tool.ainvoke({"username": UNKNOWN_LOGIN}))
+async def test_get_current_person_unknown_username_is_empty(current_person_tool):
+    data = _rows(await current_person_tool.ainvoke({"username": UNKNOWN_USERNAME}))
     assert data == []
