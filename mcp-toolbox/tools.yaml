@@ -259,6 +259,50 @@ statement: |
 ---
 
 kind: tool
+name: get-current-person
+type: neo4j-cypher
+source: crisalid-neo4j
+description: |
+  Return the signed-in person: the person on whose behalf the current
+  conversation takes place. Call this tool first whenever the question is
+  about "me", "my publications", "my laboratory", "my collaborators", etc.,
+  then use the returned uid with the other person tools.
+  In this unauthenticated configuration the username is passed as a parameter
+  (in tools-auth.yaml it is an authenticated parameter read from the token).
+  Returns at most one candidate with the same shape as search-person-by-name:
+  uid, display_name, external, identifiers (type/value list) and laboratories
+  (MEMBER_OF organization units with their labels). Returns an empty list when
+  no person of the knowledge graph matches the signed-in username.
+parameters:
+  - name: username
+    type: string
+    description: Username of the signed-in person (a local username or an eppn username@domain), as the preferred_username claim carries it
+statement: |
+  // An eppn (username@domain) is normalised to the local identifier, the same rule as
+  // stripDomainFromEppn in SoVisu+; a bare username is left unchanged.
+  WITH $username AS raw_username, split($username, '@')[0] AS local_identifier
+  MATCH (person:Person)-[:HAS_IDENTIFIER]->(local_id:AgentIdentifier {type: 'local'})
+  WHERE local_id.value IN [local_identifier, raw_username]
+  WITH DISTINCT person
+  OPTIONAL MATCH (person)-[:HAS_IDENTIFIER]->(id:AgentIdentifier)
+  WITH person,
+       collect(DISTINCT CASE WHEN id IS NOT NULL THEN {type: id.type, value: id.value} END) AS identifiers
+  OPTIONAL MATCH (person)-[:MEMBER_OF]->(ru:OrganizationUnit)
+  OPTIONAL MATCH (ru)-[:HAS_LONG_LABEL]->(ll:Literal {type: 'organization_long_label'})
+  OPTIONAL MATCH (ru)-[:HAS_SHORT_LABEL]->(sl:Literal {type: 'organization_short_label'})
+  WITH person, identifiers, ru,
+       collect(DISTINCT CASE WHEN ll IS NOT NULL THEN ll.value END) AS long_labels,
+       collect(DISTINCT CASE WHEN sl IS NOT NULL THEN sl.value END) AS short_labels
+  RETURN
+    person.uid AS uid,
+    person.display_name AS display_name,
+    person.external AS external,
+    identifiers,
+    collect(DISTINCT CASE WHEN ru IS NOT NULL THEN {uid: ru.uid, long_labels: long_labels, short_labels: short_labels} END) AS laboratories
+
+---
+
+kind: tool
 name: list-person-collaborators
 type: neo4j-cypher
 source: crisalid-neo4j
@@ -1097,6 +1141,7 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - get-current-person
   - list-person-collaborators
   - get-institution-locations
   - get-person-memberships
@@ -1128,6 +1173,7 @@ tools:
   - get-publication
   - list-person-concepts
   - search-person-by-name
+  - get-current-person
   - list-person-collaborators
   - get-institution-locations
   - get-person-memberships
@@ -1166,3 +1212,4 @@ tools:
   - list-person-top-documents
   - list-document-summaries
   - search-person-by-name
+  - get-current-person

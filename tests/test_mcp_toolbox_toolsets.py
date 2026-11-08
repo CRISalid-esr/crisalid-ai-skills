@@ -22,6 +22,7 @@ _CURATED_TOOLS = {
     "get-publication",
     "list-person-concepts",
     "search-person-by-name",
+    "get-current-person",
     "list-person-collaborators",
     "get-institution-locations",
     "get-person-memberships",
@@ -52,4 +53,7 @@ async def test_sorbobot_toolset_tools(toolbox_client):
     """SorboBot loads only what it calls."""
     tools = await toolbox_client.aload_toolset("sorbobot")
     names = set(t.name for t in tools)
-    assert names == (_CONCEPT_TOOLS - {"list-concept-experts"}) | {"search-person-by-name"}
+    assert names == (_CONCEPT_TOOLS - {"list-concept-experts"}) | {
+        "search-person-by-name",
+        "get-current-person",
+    }
