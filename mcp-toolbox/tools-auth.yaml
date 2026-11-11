@@ -640,6 +640,10 @@ description: |
   Return publications whose titles (and optionally abstracts) best match a given
   theme, using semantic similarity search. Results are deduplicated by document
   and ordered from closest to farthest match.
+  Each document comes with the people attached to it (`contributors`) and the
+  role(s) each one held, as LoC relator URIs: author, but also thesis advisor,
+  jury member, editor… Being listed does not make someone an author. Use
+  `roles` to keep only the roles you need.
 parameters:
   - name: semantic_theme
     type: string
@@ -664,6 +668,22 @@ parameters:
     type: boolean
     description: If true, keep only documents with at least one contributor from the institution's own directory (Person.external = false) and return only those contributors
     default: false
+  - name: roles
+    type: string
+    description: >-
+      Comma-separated allow-list of role codes (LoC relators); empty keeps
+      every role. A document is kept only if at least one person holds one of
+      these roles on it, and only those people are returned.
+      Authorship: aut (author).
+      Editorial: edt (editor), pbd (publication director), sad (scientific
+      advisor), aui (author of introduction), trl (translator).
+      Thesis supervision and jury: ths (thesis advisor), dgc (committee
+      member), rap (rapporteur), opn (opponent), pra (jury president).
+      Unspecified: ctb is not a role in itself, it is the fallback recorded
+      when the source does not say which role the person held.
+      To find who wrote on a theme, use "aut,ctb" (authors, plus people whose
+      role is unspecified). Add "ths" to also count thesis supervision.
+    default: ""
 statement: |
   CALL db.index.vector.queryNodes('embeddable_embedding', toInteger($limit) * 100, $semantic_theme_vector)
   YIELD node AS literal, score
@@ -672,9 +692,15 @@ statement: |
       THEN ['document_title', 'document_abstract']
       ELSE ['document_title'] END)
   MATCH (doc:Document)-[:HAS_TITLE|HAS_ABSTRACT]->(literal)
-  WITH doc, max(score) AS best_score
-  WHERE $internal_only = false
-    OR EXISTS { MATCH (doc)-[:HAS_CONTRIBUTION]->(:Contribution)<-[:HAS_CONTRIBUTION]-(:Person {external: false}) }
+  WITH doc, max(score) AS best_score,
+       [r IN split($roles, ',') WHERE trim(r) <> '' | toLower(split(trim(r), '/')[-1])] AS allowed_roles
+  WHERE ($internal_only = false AND size(allowed_roles) = 0)
+    OR EXISTS {
+      MATCH (doc)-[:HAS_CONTRIBUTION]->(c:Contribution)<-[:HAS_CONTRIBUTION]-(p:Person)
+      WHERE ($internal_only = false OR p.external = false)
+        AND (size(allowed_roles) = 0
+             OR ANY(role IN c.roles WHERE split(role, '/')[-1] IN allowed_roles))
+    }
   ORDER BY best_score DESC
   LIMIT $limit
   CALL {
@@ -688,9 +714,11 @@ statement: |
     RETURN collect(a.value) AS all_abstracts
   }
   CALL {
-    WITH doc
+    WITH doc, allowed_roles
     OPTIONAL MATCH (doc)-[:HAS_CONTRIBUTION]->(contrib:Contribution)<-[:HAS_CONTRIBUTION]-(contributor:Person)
-    WHERE $internal_only = false OR contributor.external = false
+    WHERE ($internal_only = false OR contributor.external = false)
+      AND (size(allowed_roles) = 0
+           OR ANY(role IN contrib.roles WHERE split(role, '/')[-1] IN allowed_roles))
     RETURN collect(DISTINCT CASE WHEN contributor IS NOT NULL THEN {
       uid: contributor.uid,
       name: contributor.display_name,
