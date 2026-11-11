@@ -392,3 +392,37 @@ CREATE (:Contribution {uid: 'test-contrib-5', roles: ['http://id.loc.gov/vocabul
 MATCH (d:Document {uid: 'test-doc-3'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
 MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
 MATCH (d:Document {uid: 'test-doc-3'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {score: 0.9, source: 'openalex'}]->(t);
+
+// --- Contribution roles on publications-by-theme: titles embedded along dimensions 2 and 3, away from doc1 ---
+CREATE (:Person {uid: 'roles-person-author', display_name: 'Roles Author', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-advisor', display_name: 'Roles Advisor', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-norole', display_name: 'Roles Unqualified', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-external', display_name: 'Roles External', display_name_variants: [], external: true});
+
+// roles-doc-1: internal author, internal thesis advisor and committee member, internal contributor without role, external author
+CREATE (:Document:Thesis {uid: 'roles-doc-1', document_type: 'Thesis', publication_date: '2022'});
+CREATE (:Literal:Embeddable {language: 'en', value: 'Contribution Roles in Scholarly Graphs', type: 'document_title', embedding_status: 'success', embedding_model: 'bge-m3', embedding: [i IN range(0, 1023) | CASE WHEN i = 2 THEN 1.0 ELSE 0.0 END]});
+MATCH (d:Document {uid: 'roles-doc-1'}), (t:Literal {value: 'Contribution Roles in Scholarly Graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'roles-contrib-1', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-author'}), (c:Contribution {uid: 'roles-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths', 'http://id.loc.gov/vocabulary/relators/dgc']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-advisor'}), (c:Contribution {uid: 'roles-contrib-2'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-3', roles: []});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-norole'}), (c:Contribution {uid: 'roles-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-4', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-4'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-external'}), (c:Contribution {uid: 'roles-contrib-4'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+
+// roles-doc-2: external author, the only internal contributor is the thesis advisor
+CREATE (:Document:Thesis {uid: 'roles-doc-2', document_type: 'Thesis', publication_date: '2023'});
+CREATE (:Literal:Embeddable {language: 'en', value: 'A Thesis Supervised Internally', type: 'document_title', embedding_status: 'success', embedding_model: 'bge-m3', embedding: [i IN range(0, 1023) | CASE WHEN i = 2 THEN 0.8 WHEN i = 3 THEN 0.6 ELSE 0.0 END]});
+MATCH (d:Document {uid: 'roles-doc-2'}), (t:Literal {value: 'A Thesis Supervised Internally'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'roles-contrib-5', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-2'}), (c:Contribution {uid: 'roles-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-external'}), (c:Contribution {uid: 'roles-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-6', roles: ['http://id.loc.gov/vocabulary/relators/ths']});
+MATCH (d:Document {uid: 'roles-doc-2'}), (c:Contribution {uid: 'roles-contrib-6'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-advisor'}), (c:Contribution {uid: 'roles-contrib-6'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
