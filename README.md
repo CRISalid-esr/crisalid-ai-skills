@@ -10,8 +10,11 @@ Tools are served via [MCP Toolbox for Databases](https://github.com/googleapis/m
 
 | Toolset | Tools | Use case |
 |---|---|---|
-| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications` | Clients needing curated domain tools |
-| `crisalid-unrestricted` | `get-crisalid-schema`, `list-person-publications`, `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
+| `crisalid-restricted` | the curated tools: `get-crisalid-schema`, `get-current-person`, `search-person-by-name`, `list-person-publications`, `get-person-memberships`, the concept and expertise tools… | Clients needing curated domain tools |
+| `crisalid-unrestricted` | the curated tools plus `execute-cypher-readonly` | Advanced agents with ad-hoc Cypher access |
+| `sorbobot` | the concept and expertise tools, `search-person-by-name`, `get-current-person` | The SorboBot agent |
+
+The exact tool lists are the `kind: toolset` documents at the end of `mcp-toolbox/tools.yaml`.
 
 ### Run the MCP server
 
@@ -27,7 +30,7 @@ npx @toolbox-sdk/server --config tools.yaml
 Either download from [mcp-toolbox.dev](https://mcp-toolbox.dev/documentation/introduction/) and place the binary in `mcp-toolbox/`.
 Or directly run this from folder "mcp-toolbox":
 ```bash
-export VERSION=1.2.0
+export VERSION=1.16.0
 curl -L -o toolbox https://storage.googleapis.com/mcp-toolbox-for-databases/v$VERSION/linux/amd64/toolbox
 chmod +x toolbox
 ```
@@ -61,7 +64,7 @@ A `Dockerfile` is provided in `mcp-toolbox/`. It downloads the official toolbox 
 ```bash
 docker build -t crisalid-graph-mcp mcp-toolbox/
 # Pin a specific toolbox version:
-docker build --build-arg TOOLBOX_VERSION=v1.1.0 -t crisalid-graph-mcp mcp-toolbox/
+docker build --build-arg TOOLBOX_VERSION=v1.16.0 -t crisalid-graph-mcp mcp-toolbox/
 ```
 
 **Run:**
@@ -72,6 +75,7 @@ docker run -p 5000:5000 \
   -e NEO4J_USER=neo4j \
   -e NEO4J_PASSWORD=<password> \
   -e KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm> \
+  -e MCP_AUDIENCE=crisalid-graph-mcp \
   crisalid-graph-mcp
 ```
 
@@ -92,6 +96,7 @@ docker run -p 5000:5000 \
   -e NEO4J_USER=neo4j \
   -e NEO4J_PASSWORD=<password> \
   -e KEYCLOAK_ISSUER=https://keycloak.local:8443/realms/<realm> \
+  -e MCP_AUDIENCE=crisalid-graph-mcp \
   --add-host=host.docker.internal:host-gateway \
   --add-host=keycloak.local:<host-ip> \
   crisalid-graph-mcp
@@ -99,27 +104,33 @@ docker run -p 5000:5000 \
 
 - `--add-host=host.docker.internal:host-gateway` — lets the container reach services on the host (Neo4j)
 - `--add-host=keycloak.local:<host-ip>` — resolves the Keycloak hostname inside the container
-The toolbox validates Keycloak's TLS using the system CA store. To inject a self-signed cert, override the entrypoint:
+The toolbox (a Go binary) validates Keycloak's TLS certificate with the system CA store. To trust a private CA
+(mkcert, institutional CA), mount its PEM file and point `SSL_CERT_FILE` at it:
 
 ```bash
 docker run ... \
-  -v /tmp/keycloak-local.crt:/usr/local/share/ca-certificates/custom-ca.crt \
-  --entrypoint sh \
-  crisalid-graph-mcp \
-  -c "update-ca-certificates && toolbox --address 0.0.0.0 --config tools-auth.yaml"
+  -v "$(mkcert -CAROOT)/rootCA.pem:/etc/ssl/certs/mkcert-rootCA.pem:ro" \
+  -e SSL_CERT_FILE=/etc/ssl/certs/mkcert-rootCA.pem \
+  crisalid-graph-mcp
 ```
 
 </details>
 
 ### Authentication (Keycloak OIDC)
 
-`tools-auth.yaml` adds a Keycloak OIDC auth layer. Tools marked `authRequired` reject calls without a valid JWT. Clients obtain a token via the `client_credentials` grant (service account) and pass it to the toolbox SDK.
+`tools-auth.yaml` declares a `generic` OIDC auth service named `crisalid-keycloak` and marks every served tool
+`authRequired`. For each tool call, the client sends a Keycloak access token in the `crisalid-keycloak_token` header
+(the header name is `<auth service name>_token`; the toolbox SDKs build it from the `auth_token_getters` mapping). The
+toolbox fetches the realm's OpenID configuration and JWKS from `KEYCLOAK_ISSUER` and checks the token signature, `exp`,
+`iss` (must equal the issuer advertised by the discovery document, hence a single public issuer URL for every service)
+and `aud` (must contain `MCP_AUDIENCE`). A call without a valid token is rejected.
 
 #### Environment variables
 
 **Toolbox server** (`tools-auth.yaml` / Docker):
 ```
-KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
+KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>   # public issuer URL
+MCP_AUDIENCE=crisalid-graph-mcp                                 # expected `aud` claim
 ```
 
 **Sample clients only** (not needed by the server):
@@ -127,38 +138,81 @@ KEYCLOAK_ISSUER=https://<keycloak-host>/realms/<realm>
 KEYCLOAK_CLIENT_ID=<client-id>
 KEYCLOAK_CLIENT_SECRET=<client-secret>
 KEYCLOAK_SSL_VERIFY=true   # set to false for self-signed certs in local dev
+USER_ACCESS_TOKEN=<token>  # delegated sample only
 ```
 
-#### Keycloak service account setup
+#### Token sources
 
-**1. Create a client**
+Two kinds of tokens reach the toolbox; both carry `aud: crisalid-graph-mcp` and are validated the same way.
 
-In Keycloak admin → Clients → Create client:
-- Client type: OpenID Connect
-- Client ID: e.g. `example-mcp-client`
-- Enable *Client authentication* (confidential)
-- Enable *Service accounts roles*
-- Disable *Standard flow* and *Direct access grants*
+| Token | Obtained by | Grant | Used for |
+|---|---|---|---|
+| Service-account token | the calling service with `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | `client_credentials` | batch jobs and non-interactive clients (`samples/load_restricted_toolset_authenticated.py`) |
+| Exchanged user token | the `crisalid-agents` chat API, from the access token of the signed-in person | RFC 8693 token exchange (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token_type=urn:ietf:params:oauth:token-type:access_token`, `audience=crisalid-graph-mcp`) | the chat agents, so that the toolbox knows who is asking (`samples/load_restricted_toolset_delegated.py`) |
 
-**2. Add an Audience mapper**
+The exchanged token keeps the claims of the person (`sub`, `preferred_username`, `email`) and expires with the
+original token.
 
-The toolbox validates the JWT `aud` claim against the hardcoded audience `crisalid-graph-mcp`. By default Keycloak does not include this in `aud`, so this mapper is required.
+#### Authenticated parameters and `get-current-person`
 
-In the client's page → Client scopes → click the dedicated scope (`<client-id>-dedicated`) → Add mapper → Configure a new mapper → **Audience**:
-- Name: `mcp-example-client-audience`
-- Included Custom Audience: `crisalid-graph-mcp`
-- Add to access token: On
+A tool parameter bound to a token claim with `authServices` is an *authenticated parameter*: the toolbox fills it from
+the verified token and hides it from the tool manifest, so the LLM can neither see nor supply it.
 
-**3. Note the client secret**
+```yaml
+parameters:
+  - name: username
+    type: string
+    description: Username of the signed-in person, taken from the preferred_username claim of the token
+    authServices:
+      - name: crisalid-keycloak
+        field: preferred_username
+authRequired:
+  - crisalid-keycloak
+```
 
-Clients → `<your-client-id>` → Credentials → copy the secret into `KEYCLOAK_CLIENT_SECRET`.
+`get-current-person` (toolsets `crisalid-restricted`, `crisalid-unrestricted` and `sorbobot`) is the only tool that
+uses one. It takes no LLM-visible input and returns the signed-in person in the shape of a `search-person-by-name`
+candidate (`uid`, `display_name`, `external`, `identifiers`, `laboratories`), or an empty list when nobody matches. The
+person is resolved through the `local` agent identifier:
+
+```cypher
+WITH $username AS raw_username, split($username, '@')[0] AS local_identifier
+MATCH (person:Person)-[:HAS_IDENTIFIER]->(local_id:AgentIdentifier {type: 'local'})
+WHERE local_id.value IN [local_identifier, raw_username]
+```
+
+When `preferred_username` is an eppn (`login@domain`), the domain is dropped before the lookup, the same rule as
+`stripDomainFromEppn` in SoVisu+ (`src/app/auth/auth_options.ts`), which registers the stripped login as the person's
+`local` identifier. A `local` identifier that stores the full eppn still matches. Agents call `get-current-person`
+first for "me / my …" questions and pass the returned `uid` to the other person tools, which keep their explicit
+`person_uid` parameter.
+
+In `tools.yaml` (no authentication, local development and tests), `username` is an ordinary parameter supplied by the
+caller; the statement is the same.
+
+#### Keycloak configuration (realm `crisalid-inst`)
+
+- Client `crisalid-graph-mcp`: confidential, every flow off. It is the resource client the toolbox stands for: the value of
+  `MCP_AUDIENCE`. It never authenticates.
+- Client scope `crisalid-graph-mcp-audience` (default type) with an *Audience* mapper → included client audience
+  `crisalid-graph-mcp`, added to the access token. Without it Keycloak does not put `crisalid-graph-mcp` in `aud`.
+- Client `crisalid-agents`: confidential, *Service accounts roles* on (batch), *Standard token exchange* on, standard
+  and direct flows off; `crisalid-graph-mcp-audience` as default scope. It is the requester of the token exchange and the
+  owner of the service account. The `audience` parameter of a token exchange can only keep audiences the requester's
+  scopes already grant, which is why the scope is assigned to this client.
+- The user-facing clients (`sovisuplus`, `open-webui`) do not need the scope: their tokens are issued for the chat API
+  and exchanged by it.
+
+For a batch-only client, the same recipe applies: confidential client, service accounts on, the
+`crisalid-graph-mcp-audience` scope (or a dedicated Audience mapper with included custom audience `crisalid-graph-mcp`), and the
+secret copied into `KEYCLOAK_CLIENT_SECRET`.
 
 #### SSL certificates in local environments
 
 If your Keycloak instance uses a self-signed certificate:
 
-- **Client side** (`samples/load_restricted_toolset_authenticated.py`): set `KEYCLOAK_SSL_VERIFY=false` in `.env` to skip verification when fetching tokens.
-- **Toolbox server side**: the toolbox (Go binary) validates the JWT by fetching Keycloak's JWKS endpoint and uses the system CA trust store. Add the cert to the system trust store:
+- **Client side** (`samples/load_restricted_toolset_authenticated.py`, `samples/load_restricted_toolset_delegated.py`): set `KEYCLOAK_SSL_VERIFY=false` in `.env` to skip verification when fetching tokens.
+- **Toolbox server side**: the toolbox (Go binary) validates the JWT by fetching Keycloak's JWKS endpoint and uses the system CA trust store (in Docker, see `SSL_CERT_FILE` above). On a host, add the cert to the system trust store:
 
 ```bash
 # Export the cert
@@ -183,9 +237,14 @@ uv run python samples/load_restricted_toolset.py
 # Load the unrestricted toolset and run a sample Cypher query (no auth)
 uv run python samples/load_unrestricted_toolset.py
 
-# Load the restricted toolset with Keycloak authentication
+# Load the restricted toolset with a service-account token
 # Requires toolbox running with tools-auth.yaml and KEYCLOAK_* env vars set
 uv run python samples/load_restricted_toolset_authenticated.py
+
+# Load the restricted toolset with the token of a signed-in person and call get-current-person
+# USER_ACCESS_TOKEN: a user access token; with KEYCLOAK_CLIENT_ID/SECRET set, it is exchanged
+# for the toolbox audience (MCP_AUDIENCE, default crisalid-graph-mcp) before being sent
+uv run python samples/load_restricted_toolset_delegated.py
 ```
 
 ### Run the tests

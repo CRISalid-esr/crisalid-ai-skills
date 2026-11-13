@@ -278,6 +278,8 @@ CREATE (pn3ln:Literal {language: 'fr', value: 'Martin'})
 MERGE (pn3)-[:HAS_FIRST_NAME]->(pn3fn)
 MERGE (pn3)-[:HAS_LAST_NAME]->(pn3ln)
 MERGE (p2)-[:HAS_NAME]->(pn3)
+CREATE (p2i1:AgentIdentifier {type: 'local', value: 'jmartin'})
+MERGE (p2)-[:HAS_IDENTIFIER]->(p2i1)
 CREATE (c_doc_3:Contribution {uid: 'contrib-3', roles: ['AUTHOR']})
 MERGE (doc)-[:HAS_CONTRIBUTION]->(c_doc_3)
 MERGE (p2)-[:HAS_CONTRIBUTION]->(c_doc_3)
@@ -313,3 +315,114 @@ CREATE (ru3:OrganizationUnit:Unit:ResearchUnit {uid: 'local-ru-888888', generic_
 CREATE (ru3_sl:Literal {language: 'fr', value: 'LRA Paris', type: 'organization_short_label'})
 MERGE (ru3)-[:HAS_SHORT_LABEL]->(ru3_sl)
 
+;
+
+// --- OpenAlex taxonomy: Domain > Field > SubField > Topic ---
+
+CREATE (:Concept:Domain {uid: 'https://openalex.org/domains/3', uri: 'https://openalex.org/domains/3'});
+CREATE (:Concept:Field {uid: 'https://openalex.org/fields/17', uri: 'https://openalex.org/fields/17'});
+CREATE (:Concept:SubField {uid: 'https://openalex.org/subfields/1702', uri: 'https://openalex.org/subfields/1702'});
+CREATE (:Concept:Topic {uid: 'https://openalex.org/T11010', uri: 'https://openalex.org/T11010'});
+
+CREATE (:Literal:Embeddable {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Computer Science', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'study of computation', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+CREATE (:Literal:Embeddable {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition', embedding_status: 'pending'});
+
+MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'Physical Sciences', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/domains/3'}), (l:Literal {value: 'branch of natural science that studies non-living systems', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'Computer Science', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/fields/17'}), (l:Literal {value: 'study of computation', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'Artificial Intelligence', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/subfields/1702'}), (l:Literal {value: 'field of computer science and engineering practices for intelligence demonstrated by machines and intelligent agents', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, Reasoning, and Knowledge', language: 'en', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (c:Concept {uid: 'https://openalex.org/T11010'}), (l:Literal {value: 'Logic, reasoning and knowledge representation topic', language: 'en', type: 'concept_definition'}) MERGE (c)-[:HAS_DEFINITION]->(l);
+
+MATCH (child:Concept {uid: 'https://openalex.org/fields/17'}), (parent:Concept {uid: 'https://openalex.org/domains/3'}) MERGE (child)-[:BROADER]->(parent);
+MATCH (child:Concept {uid: 'https://openalex.org/subfields/1702'}), (parent:Concept {uid: 'https://openalex.org/fields/17'}) MERGE (child)-[:BROADER]->(parent);
+MATCH (child:Concept {uid: 'https://openalex.org/T11010'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent);
+
+// --- Jeannette Durand: author of test-doc-1 ---
+CREATE (:Person {uid: 'test-person-jdurand', display_name: 'Jeannette Durand', display_name_variants: ['J. Durand'], external: false});
+
+CREATE (:Document:JournalArticle {uid: 'test-doc-1', document_type: 'JournalArticle', publication_date: '2020-01-15'});
+CREATE (:Literal {language: 'en', value: 'Active Learning Strategies for Knowledge Graphs', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-1'}), (t:Literal {value: 'Active Learning Strategies for Knowledge Graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
+
+CREATE (:Contribution {uid: 'test-contrib-1', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-1'}), (t:Concept:Topic {uid: 'https://openalex.org/T11010'}) MERGE (d)-[:HAS_TOPIC {score: 0.85, source: 'crisalid'}]->(t);
+
+// --- Marc Lefevre: thesis director of test-doc-1 ---
+CREATE (:Person {uid: 'test-person-mlefevre', display_name: 'Marc Lefevre', display_name_variants: [], external: false});
+CREATE (:Contribution {uid: 'test-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-2'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+
+// --- External co-author ---
+CREATE (:Person {uid: 'test-person-external', display_name: 'External Researcher', display_name_variants: [], external: true});
+CREATE (:Contribution {uid: 'test-contrib-3', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-1'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-external'}), (c:Contribution {uid: 'test-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+
+// --- Sibling topic, and test-doc-2 by Marc Lefevre ---
+CREATE (:Concept:Topic {uid: 'https://openalex.org/T10028', uri: 'https://openalex.org/T10028'});
+CREATE (:Literal:Embeddable {value: 'Topic Modeling', language: 'en', type: 'concept_pref_label', embedding_status: 'pending'});
+MATCH (c:Concept {uid: 'https://openalex.org/T10028'}), (l:Literal {value: 'Topic Modeling', type: 'concept_pref_label'}) MERGE (c)-[:HAS_PREF_LABEL]->(l);
+MATCH (child:Concept {uid: 'https://openalex.org/T10028'}), (parent:Concept {uid: 'https://openalex.org/subfields/1702'}) MERGE (child)-[:BROADER]->(parent);
+
+CREATE (:Document:JournalArticle {uid: 'test-doc-2', document_type: 'JournalArticle', publication_date: '2023'});
+CREATE (:Literal {language: 'en', value: 'Neural Topic Models for Scientific Corpora', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-2'}), (t:Literal {value: 'Neural Topic Models for Scientific Corpora'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'test-contrib-4', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'test-doc-2'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-mlefevre'}), (c:Contribution {uid: 'test-contrib-4'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-2'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {score: 0.7, source: 'crisalid'}]->(t);
+
+// --- test-doc-3: Jeannette Durand is jury president only (pra) ---
+CREATE (:Document:Thesis {uid: 'test-doc-3', document_type: 'Thesis', publication_date: '2021'});
+CREATE (:Literal {language: 'en', value: 'A Thesis on Topic Models', type: 'document_title'});
+MATCH (d:Document {uid: 'test-doc-3'}), (t:Literal {value: 'A Thesis on Topic Models'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'test-contrib-5', roles: ['http://id.loc.gov/vocabulary/relators/pra']});
+MATCH (d:Document {uid: 'test-doc-3'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'test-person-jdurand'}), (c:Contribution {uid: 'test-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+MATCH (d:Document {uid: 'test-doc-3'}), (t:Concept:Topic {uid: 'https://openalex.org/T10028'}) MERGE (d)-[:HAS_TOPIC {score: 0.9, source: 'openalex'}]->(t);
+
+// --- Contribution roles on publications-by-theme: titles embedded along dimensions 2 and 3, away from doc1 ---
+CREATE (:Person {uid: 'roles-person-author', display_name: 'Roles Author', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-advisor', display_name: 'Roles Advisor', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-norole', display_name: 'Roles Unqualified', display_name_variants: [], external: false});
+CREATE (:Person {uid: 'roles-person-external', display_name: 'Roles External', display_name_variants: [], external: true});
+
+// roles-doc-1: internal author, internal thesis advisor and committee member, internal contributor without role, external author
+CREATE (:Document:Thesis {uid: 'roles-doc-1', document_type: 'Thesis', publication_date: '2022'});
+CREATE (:Literal:Embeddable {language: 'en', value: 'Contribution Roles in Scholarly Graphs', type: 'document_title', embedding_status: 'success', embedding_model: 'bge-m3', embedding: [i IN range(0, 1023) | CASE WHEN i = 2 THEN 1.0 ELSE 0.0 END]});
+MATCH (d:Document {uid: 'roles-doc-1'}), (t:Literal {value: 'Contribution Roles in Scholarly Graphs'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'roles-contrib-1', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-1'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-author'}), (c:Contribution {uid: 'roles-contrib-1'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-2', roles: ['http://id.loc.gov/vocabulary/relators/ths', 'http://id.loc.gov/vocabulary/relators/dgc']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-2'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-advisor'}), (c:Contribution {uid: 'roles-contrib-2'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-3', roles: []});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-3'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-norole'}), (c:Contribution {uid: 'roles-contrib-3'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-4', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-1'}), (c:Contribution {uid: 'roles-contrib-4'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-external'}), (c:Contribution {uid: 'roles-contrib-4'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+
+// roles-doc-2: external author, the only internal contributor is the thesis advisor
+CREATE (:Document:Thesis {uid: 'roles-doc-2', document_type: 'Thesis', publication_date: '2023'});
+CREATE (:Literal:Embeddable {language: 'en', value: 'A Thesis Supervised Internally', type: 'document_title', embedding_status: 'success', embedding_model: 'bge-m3', embedding: [i IN range(0, 1023) | CASE WHEN i = 2 THEN 0.8 WHEN i = 3 THEN 0.6 ELSE 0.0 END]});
+MATCH (d:Document {uid: 'roles-doc-2'}), (t:Literal {value: 'A Thesis Supervised Internally'}) MERGE (d)-[:HAS_TITLE]->(t);
+CREATE (:Contribution {uid: 'roles-contrib-5', roles: ['http://id.loc.gov/vocabulary/relators/aut']});
+MATCH (d:Document {uid: 'roles-doc-2'}), (c:Contribution {uid: 'roles-contrib-5'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-external'}), (c:Contribution {uid: 'roles-contrib-5'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);
+CREATE (:Contribution {uid: 'roles-contrib-6', roles: ['http://id.loc.gov/vocabulary/relators/ths']});
+MATCH (d:Document {uid: 'roles-doc-2'}), (c:Contribution {uid: 'roles-contrib-6'}) MERGE (d)-[:HAS_CONTRIBUTION]->(c);
+MATCH (p:Person {uid: 'roles-person-advisor'}), (c:Contribution {uid: 'roles-contrib-6'}) MERGE (p)-[:HAS_CONTRIBUTION]->(c);

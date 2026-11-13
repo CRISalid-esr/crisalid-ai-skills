@@ -22,25 +22,28 @@ MCP Toolbox tools and sample clients for the CRISalid institutional knowledge gr
 
 | Toolset | Tools |
 |---|---|
-| `crisalid-restricted` | `get-crisalid-schema`, `list-person-publications`, `list-person-concepts`, `search-person-by-name` |
+| `crisalid-restricted` | curated tools: `get-crisalid-schema`, `get-current-person`, `search-person-by-name`, `list-person-publications`, `get-person-memberships`, concept/expertise tools… (see the `kind: toolset` documents) |
 | `crisalid-unrestricted` | above + `execute-cypher-readonly` |
+| `sorbobot` | concept/expertise tools + `search-person-by-name` + `get-current-person` |
 
 ## Authentication
 
 - `tools.yaml` — no auth, used for local dev and tests
-- `tools-auth.yaml` — Keycloak OIDC (`type: generic`), `authRequired` on curated tools
-- Auth service name: `crisalid-keycloak`, audience: `crisalid-graph-mcp` (hardcoded in yaml)
-- **Server-side env var**: `KEYCLOAK_ISSUER` only — the toolbox never needs client credentials
-- **Client-side env vars**: `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_SSL_VERIFY` — used by sample scripts only
-- Clients use `client_credentials` grant; token getter passed via `auth_token_getters` to `aload_toolset()`
+- `tools-auth.yaml` — Keycloak OIDC (`type: generic`), `authRequired: [crisalid-keycloak]` on every served tool
+- Auth service name: `crisalid-keycloak`; token sent in the `crisalid-keycloak_token` header; validated: signature (JWKS), `exp`, `iss` (discovery document of `KEYCLOAK_ISSUER`), `aud` (`MCP_AUDIENCE`, value `crisalid-graph-mcp`)
+- **Server-side env vars**: `KEYCLOAK_ISSUER` (public issuer) and `MCP_AUDIENCE` — the toolbox never needs client credentials
+- **Client-side env vars**: `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_SSL_VERIFY`, `USER_ACCESS_TOKEN` — used by sample scripts only
+- Two token sources: `client_credentials` (service account, batch) or a user token exchanged for the toolbox audience (RFC 8693, done by the chat API); either way the getter is passed via `auth_token_getters` to `aload_toolset()`
+- `get-current-person` resolves the signed-in person from the *authenticated parameter* `username` (`authServices: [{name: crisalid-keycloak, field: preferred_username}]`, hidden from the LLM); the Cypher strips the domain of an eppn (`split($username, '@')[0]`, twin of `stripDomainFromEppn` in SoVisu+) and matches the `local` AgentIdentifier. In `tools.yaml` the same tool takes `username` as a plain parameter.
 
-> **Important**: `tools.yaml` and `tools-auth.yaml` must always be kept in sync. Any tool added to `tools.yaml` must also be added to `tools-auth.yaml` (with `authRequired: [crisalid-keycloak]` for curated tools), and both toolset lists must be updated identically.
+> **Important**: `tools.yaml` and `tools-auth.yaml` must always be kept in sync. Any tool added to `tools.yaml` must also be added to `tools-auth.yaml` (with `authRequired: [crisalid-keycloak]`), and both toolset lists must be updated identically. The only allowed differences are the `authService` document, the `authRequired` lists and the `authServices` binding of `get-current-person`'s `username` (`diff mcp-toolbox/tools.yaml mcp-toolbox/tools-auth.yaml` should show nothing else).
 
 ## Docker
 
 - Image name on DockerHub: `crisalidesr/crisalid-neo4j-mcp-toolbox`
 - Toolbox listens on `0.0.0.0:5000` (required for Docker port mapping — default is `127.0.0.1`)
-- No entrypoint — plain `CMD`. For self-signed KC cert in local dev, override entrypoint with `update-ca-certificates && toolbox ...`
+- `TOOLBOX_VERSION` build arg pins the toolbox binary (`v1.16.0`)
+- No entrypoint: `CMD` runs `toolbox --address 0.0.0.0 --config tools-auth.yaml`. A private CA for Keycloak is trusted by mounting its PEM file and setting `SSL_CERT_FILE` (Go reads it), nothing else is needed.
 
 ## Linting
 
@@ -65,7 +68,7 @@ Fixtures are auto-loaded from `tests/fixtures/graph.cypher` on each run.
 
 ## MCP protocol version
 
-All sample clients must use `Protocol.MCP_LATEST` (toolbox v1.1.0+ requires it):
+All sample clients must use `Protocol.MCP_LATEST` (toolbox v1.1.0+ requires it; the Docker image pins v1.16.0):
 
 ```python
 from toolbox_core.protocol import Protocol

@@ -12,7 +12,7 @@ async def test_count_persons(cypher_tool):
     result = await cypher_tool.ainvoke(
         {"cypher": "MATCH (n:Person) RETURN count(n) AS count"}
     )
-    assert '"count":2' in str(result)
+    assert '"count":9' in str(result)
 
 
 @pytest.mark.asyncio
@@ -20,7 +20,7 @@ async def test_count_documents(cypher_tool):
     result = await cypher_tool.ainvoke(
         {"cypher": "MATCH (n:Document) RETURN count(n) AS count"}
     )
-    assert "1" in str(result)
+    assert '"count":6' in str(result)
 
 
 @pytest.mark.asyncio
